@@ -135,11 +135,12 @@ func run() error {
 
 	// Create surface (connects terminal + renderer + input + termio)
 	s, err := surface.New(surface.Config{
-		Rows:     rows,
-		Cols:     cols,
-		Shell:    cfg.Shell,
-		Renderer: ren,
-		Window:   window,
+		Rows:            rows,
+		Cols:            cols,
+		Shell:           cfg.Shell,
+		Renderer:        ren,
+		Window:          window,
+		ScrollbackLines: cfg.ScrollbackLines,
 	})
 	if err != nil {
 		return fmt.Errorf("create surface: %w", err)

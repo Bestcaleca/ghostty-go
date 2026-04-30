@@ -100,6 +100,16 @@ func (t *Terminal) ScrollbackRows() []Row {
 	return t.active.Scrollback
 }
 
+// SetMaxScroll sets the maximum number of scrollback lines.
+func (t *Terminal) SetMaxScroll(n int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.primary.MaxScroll = n
+	if t.alternate != nil {
+		t.alternate.MaxScroll = n
+	}
+}
+
 // MouseMode returns the current mouse tracking mode.
 func (t *Terminal) MouseMode() input.MouseMode {
 	t.mu.RLock()

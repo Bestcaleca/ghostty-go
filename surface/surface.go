@@ -58,16 +58,20 @@ type Surface struct {
 
 // Config holds surface configuration.
 type Config struct {
-	Rows     int
-	Cols     int
-	Shell    string
-	Renderer *renderer.Renderer
-	Window   *glfw.Window
+	Rows           int
+	Cols           int
+	Shell          string
+	Renderer       *renderer.Renderer
+	Window         *glfw.Window
+	ScrollbackLines int
 }
 
 // New creates a new Surface.
 func New(cfg Config) (*Surface, error) {
 	term := terminal.New(cfg.Rows, cfg.Cols)
+	if cfg.ScrollbackLines > 0 {
+		term.SetMaxScroll(cfg.ScrollbackLines)
+	}
 	msgChan := make(chan termio.Message, 16)
 
 	tio, err := termio.New(termio.Config{
