@@ -2,9 +2,10 @@ package terminal
 
 // Cell represents a single character cell in the terminal grid.
 type Cell struct {
-	Char  rune   // Unicode character (0 = empty)
-	Width uint8  // 0=empty, 1=narrow, 2=wide (spacer head)
-	Style StyleID
+	Char      rune   // Unicode character (0 = empty)
+	Width     uint8  // 0=empty, 1=narrow, 2=wide (spacer head)
+	Style     StyleID
+	Hyperlink string // URL for hyperlinked cells (empty = no link)
 }
 
 // EmptyCell returns a cell with default style.

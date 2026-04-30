@@ -32,6 +32,9 @@ type Terminal struct {
 	// Current SGR state (applied to new characters)
 	CurrentStyle Style
 
+	// Current hyperlink (OSC 8)
+	currentHyperlink string
+
 	// Callbacks
 	clipboardWrite func(clipboard string, data []byte) // write to system clipboard
 	clipboardRead  func(clipboard string) []byte        // read from system clipboard
@@ -186,9 +189,10 @@ func (t *Terminal) Print(ch rune) {
 	// Write the character
 	styleID := s.Styles.Get(t.CurrentStyle)
 	s.Rows[row].Cells[col] = Cell{
-		Char:  ch,
-		Width: uint8(width),
-		Style: styleID,
+		Char:      ch,
+		Width:     uint8(width),
+		Style:     styleID,
+		Hyperlink: t.currentHyperlink,
 	}
 
 	// Handle wide characters: mark the next cell as spacer
@@ -446,7 +450,13 @@ func (t *Terminal) OSCDispatch(cmd parser.OSCCommand) {
 	case parser.OSCSetIconName:
 		// ignore
 	case parser.OSCSetHyperlink:
-		// TODO: handle hyperlinks
+		if c.URI == "" {
+			// End hyperlink
+			t.currentHyperlink = ""
+		} else {
+			// Start hyperlink
+			t.currentHyperlink = c.URI
+		}
 	case parser.OSCSetClipboard:
 		t.handleClipboard(c)
 	}

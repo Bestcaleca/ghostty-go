@@ -1,6 +1,8 @@
 package surface
 
 import (
+	"os/exec"
+	"runtime"
 	"sync"
 	"time"
 
@@ -198,11 +200,8 @@ func (s *Surface) HandleChar(char rune) {
 
 // HandleMouseButton processes a GLFW mouse button event.
 func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey, x, y float64) {
-	m := input.Modifiers{
-		Shift:   mods&glfw.ModShift != 0,
-		Control: mods&glfw.ModControl != 0,
-		Alt:     mods&glfw.ModAlt != 0,
-		Super:   mods&glfw.ModSuper != 0,
+	if action != glfw.Press {
+		return
 	}
 
 	// Convert pixel coordinates to cell coordinates
@@ -212,6 +211,22 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 	metrics := s.renderer.Metrics()
 	col := int(x / float64(metrics.CellWidth))
 	row := int(y / float64(metrics.CellHeight))
+
+	// Ctrl+Click on hyperlink: open URL
+	if mods&glfw.ModControl != 0 && button == glfw.MouseButtonLeft {
+		url := s.GetHyperlink(row, col)
+		if url != "" {
+			openURL(url)
+			return
+		}
+	}
+
+	m := input.Modifiers{
+		Shift:   mods&glfw.ModShift != 0,
+		Control: mods&glfw.ModControl != 0,
+		Alt:     mods&glfw.ModAlt != 0,
+		Super:   mods&glfw.ModSuper != 0,
+	}
 
 	seq := s.mouseH.EncodeMouseButton(button, action, m, col, row)
 	if seq != nil {
@@ -378,6 +393,18 @@ func (s *Surface) Rows() int {
 	return s.rows
 }
 
+// GetHyperlink returns the URL at the given cell position, or empty string.
+func (s *Surface) GetHyperlink(row, col int) string {
+	grid := s.terminal.Grid()
+	if row < 0 || row >= len(grid) {
+		return ""
+	}
+	if col < 0 || col >= len(grid[row]) {
+		return ""
+	}
+	return grid[row][col].Hyperlink
+}
+
 // Terminal returns the underlying terminal (for testing).
 func (s *Surface) Terminal() *terminal.Terminal {
 	return s.terminal
@@ -416,4 +443,20 @@ func encodeUTF8(r rune, buf []byte) int {
 		buf[3] = 0x80 | byte(r&0x3F)
 		return 4
 	}
+}
+
+// openURL opens a URL in the default browser.
+func openURL(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return
+	}
+	cmd.Start()
 }
