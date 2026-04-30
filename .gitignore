@@ -1,0 +1,28 @@
+# Binaries
+ghostty-go
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.codex/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/bin/
+/dist/
