@@ -12,7 +12,9 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 
 	"github.com/ghostty-go/ghostty-go/font"
+	"github.com/ghostty-go/ghostty-go/parser"
 	"github.com/ghostty-go/ghostty-go/renderer"
+	"github.com/ghostty-go/ghostty-go/terminal"
 )
 
 const (
@@ -97,8 +99,48 @@ func run() error {
 		ren.EnsureAtlasGlyph(face, ch)
 	}
 
-	// Build a demo grid with "Hello, World!" and colored text
-	grid := buildDemoGrid()
+	// Create terminal and stream
+	term := terminal.New(gridRows, gridCols)
+	stream := terminal.NewStream(term)
+
+	// Write demo content through the stream (VT sequences)
+	stream.Process([]byte(
+		"\x1b[2J" +     // Clear screen
+			"\x1b[H" +  // Cursor home
+			"\x1b[1;36m" + // Bold cyan
+			"ghostty-go v" + version + "\r\n\r\n" +
+			"\x1b[0m" + // Reset
+			"A GPU-accelerated terminal emulator written in " +
+			"\x1b[1;32m" + "Go" + "\x1b[0m\r\n\r\n" +
+			"\x1b[1;33m" + "Features:" + "\x1b[0m\r\n" +
+			"  - OpenGL 4.1 rendering with instanced quads\r\n" +
+			"  - Glyph atlas with shelf packing\r\n" +
+			"  - VT500-series terminal parser\r\n" +
+			"  - Cross-platform: Linux + macOS\r\n\r\n" +
+			"\x1b[1;33m" + "Colors: " + "\x1b[0m" +
+			"\x1b[31m" + "Red " +
+			"\x1b[32m" + "Green " +
+			"\x1b[34m" + "Blue " +
+			"\x1b[33m" + "Yellow " +
+			"\x1b[36m" + "Cyan" +
+			"\x1b[0m\r\n\r\n" +
+			"\x1b[32m" + "user@ghostty-go" + "\x1b[0m" +
+			":" +
+			"\x1b[34m" + "~/project" + "\x1b[0m" +
+			"$ echo \"Hello, World!\"\r\n" +
+			"Hello, World!\r\n" +
+			"\x1b[32m" + "user@ghostty-go" + "\x1b[0m" +
+			":" +
+			"\x1b[34m" + "~/project" + "\x1b[0m" +
+			"$ ",
+	))
+
+	// Set cursor style
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'q',
+		Params:     [24]uint16{6},
+		ParamCount: 1,
+	})
 
 	// Handle resize
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width, height int) {
@@ -119,9 +161,33 @@ func run() error {
 			lastBlink = time.Now()
 		}
 
+		// Get terminal state
+		grid := term.Grid()
+		cursorRow, cursorCol, _, _ := term.Cursor()
+
+		// Convert terminal grid to renderer cells
+		renderGrid := make([][]renderer.Cell, len(grid))
+		for row := range grid {
+			renderGrid[row] = make([]renderer.Cell, len(grid[row]))
+			for col := range grid[row] {
+				c := grid[row][col]
+				style := term.Active().Styles.Lookup(c.Style)
+
+				fg := styleToColor(style.FG, renderer.Color{R: 0.9, G: 0.9, B: 0.9, A: 1.0})
+				bg := styleToColor(style.BG, renderer.Color{R: 0.1, G: 0.1, B: 0.12, A: 1.0})
+
+				renderGrid[row][col] = renderer.Cell{
+					Char: c.Char,
+					FG:   fg,
+					BG:   bg,
+					Width: int(c.Width),
+				}
+			}
+		}
+
 		// Draw frame
-		ren.SetCursor(0, 13, cursorVisible, renderer.CursorBlock)
-		ren.DrawFrame(grid)
+		ren.SetCursor(cursorRow, cursorCol, cursorVisible, renderer.CursorBlock)
+		ren.DrawFrame(renderGrid)
 
 		window.SwapBuffers()
 	}
@@ -130,19 +196,14 @@ func run() error {
 }
 
 func loadFont() (*font.Face, error) {
-	// Try common monospace font paths on Linux
 	candidates := []string{
-		// Ubuntu/Debian
 		"/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
 		"/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
 		"/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf",
 		"/usr/share/fonts/truetype/freefont/FreeMono.ttf",
-		// Arch
 		"/usr/share/fonts/TTF/DejaVuSansMono.ttf",
 		"/usr/share/fonts/noto-mono/NotoSansMono-Regular.ttf",
-		// Fedora
 		"/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono.ttf",
-		// macOS
 		"/System/Library/Fonts/Menlo.ttc",
 		"/System/Library/Fonts/Monaco.dfont",
 		"/Library/Fonts/Courier New.ttf",
@@ -154,94 +215,17 @@ func loadFont() (*font.Face, error) {
 		}
 	}
 
-	// Try finding via fc-match (fontconfig)
 	return nil, fmt.Errorf("no monospace font found in: %s", strings.Join(candidates, ", "))
 }
 
-func buildDemoGrid() [][]renderer.Cell {
-	// Default colors
-	fg := renderer.Color{R: 0.9, G: 0.9, B: 0.9, A: 1.0}
-	bg := renderer.Color{R: 0.1, G: 0.1, B: 0.12, A: 1.0}
-
-	// Special colors
-	red := renderer.Color{R: 0.95, G: 0.3, B: 0.3, A: 1.0}
-	green := renderer.Color{R: 0.3, G: 0.95, B: 0.4, A: 1.0}
-	blue := renderer.Color{R: 0.4, G: 0.6, B: 0.95, A: 1.0}
-	yellow := renderer.Color{R: 0.95, G: 0.85, B: 0.3, A: 1.0}
-	cyan := renderer.Color{R: 0.3, G: 0.9, B: 0.9, A: 1.0}
-	dim := renderer.Color{R: 0.5, G: 0.5, B: 0.5, A: 1.0}
-
-	// Initialize empty grid
-	grid := make([][]renderer.Cell, gridRows)
-	for row := range grid {
-		grid[row] = make([]renderer.Cell, gridCols)
-		for col := range grid[row] {
-			grid[row][col] = renderer.Cell{Char: ' ', FG: fg, BG: bg}
-		}
+func styleToColor(c terminal.Color, fallback renderer.Color) renderer.Color {
+	if !c.Valid {
+		return fallback
 	}
-
-	// Title bar
-	titleBar := renderer.Color{R: 0.15, G: 0.15, B: 0.2, A: 1.0}
-	for col := 0; col < gridCols; col++ {
-		grid[0][col].BG = titleBar
-	}
-	writeString(grid, 0, 2, "ghostty-go v"+version, cyan, titleBar)
-
-	// Main content
-	writeString(grid, 2, 2, "Welcome to ", fg, bg)
-	writeString(grid, 2, 13, "ghostty-go", green, bg)
-	writeString(grid, 2, 23, "!", fg, bg)
-
-	writeString(grid, 4, 2, "A GPU-accelerated terminal emulator written in ", dim, bg)
-	writeString(grid, 4, 50, "Go", cyan, bg)
-
-	writeString(grid, 6, 2, "Features:", yellow, bg)
-	writeString(grid, 7, 4, "- OpenGL 4.1 rendering with instanced quads", fg, bg)
-	writeString(grid, 8, 4, "- Glyph atlas with shelf packing", fg, bg)
-	writeString(grid, 9, 4, "- VT500-series terminal parser (coming soon)", dim, bg)
-	writeString(grid, 10, 4, "- Cross-platform: Linux + macOS", fg, bg)
-
-	writeString(grid, 12, 2, "Colors: ", fg, bg)
-	writeString(grid, 12, 10, "Red ", red, bg)
-	writeString(grid, 12, 14, "Green ", green, bg)
-	writeString(grid, 12, 20, "Blue ", blue, bg)
-	writeString(grid, 12, 25, "Yellow ", yellow, bg)
-	writeString(grid, 12, 32, "Cyan", cyan, bg)
-
-	// Prompt simulation
-	writeString(grid, 14, 2, "user@ghostty-go", green, bg)
-	writeString(grid, 14, 17, ":", fg, bg)
-	writeString(grid, 14, 18, "~/project", blue, bg)
-	writeString(grid, 14, 27, "$ ", fg, bg)
-	writeString(grid, 14, 29, "echo \"Hello, World!\"", fg, bg)
-
-	writeString(grid, 15, 2, "Hello, World!", fg, bg)
-
-	writeString(grid, 17, 2, "user@ghostty-go", green, bg)
-	writeString(grid, 17, 17, ":", fg, bg)
-	writeString(grid, 17, 18, "~/project", blue, bg)
-	writeString(grid, 17, 27, "$ ", fg, bg)
-
-	// Status line at bottom
-	statusBar := renderer.Color{R: 0.15, G: 0.15, B: 0.2, A: 1.0}
-	for col := 0; col < gridCols; col++ {
-		grid[gridRows-1][col].BG = statusBar
-	}
-	writeString(grid, gridRows-1, 2, "NORMAL", dim, statusBar)
-	writeString(grid, gridRows-1, gridCols-20, "utf-8  LF  Ln 1, Col 1", dim, statusBar)
-
-	return grid
-}
-
-func writeString(grid [][]renderer.Cell, row, col int, s string, fg, bg renderer.Color) {
-	if row < 0 || row >= len(grid) {
-		return
-	}
-	for _, ch := range s {
-		if col >= len(grid[row]) {
-			break
-		}
-		grid[row][col] = renderer.Cell{Char: ch, FG: fg, BG: bg}
-		col++
+	return renderer.Color{
+		R: float32(c.R) / 255.0,
+		G: float32(c.G) / 255.0,
+		B: float32(c.B) / 255.0,
+		A: 1.0,
 	}
 }

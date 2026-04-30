@@ -136,7 +136,6 @@ func init() {
 		stateTable[b][StateCSIEntry] = Entry{StateCSIParam, ActionParam}
 	}
 	stateTable[0x3A][StateCSIEntry] = Entry{StateCSIIgnore, ActionNone} // colon before params = ignore
-	stateTable[0x3F][StateCSIEntry] = Entry{StateCSIParam, ActionCollectPrivate} // ? = private mode prefix
 	stateTable[0x3B][StateCSIEntry] = Entry{StateCSIParam, ActionParamSeparator}
 	// Intermediate bytes (0x20-0x2F)
 	for b := 0x20; b <= 0x2F; b++ {
@@ -147,10 +146,12 @@ func init() {
 		stateTable[b][StateCSIEntry] = Entry{StateGround, ActionCSIDispatch}
 	}
 	stateTable[0x7F][StateCSIEntry] = Entry{StateCSIEntry, ActionIgnore}
-	// Invalid: 0x3C-0x3F (except 0x3B which is separator) -> CSI Ignore
-	for b := 0x3C; b <= 0x3F; b++ {
+	// Invalid: 0x3C-0x3E -> CSI Ignore
+	for b := 0x3C; b <= 0x3E; b++ {
 		stateTable[b][StateCSIEntry] = Entry{StateCSIIgnore, ActionNone}
 	}
+	// 0x3F (?) = private mode prefix -> collect and enter param state
+	stateTable[0x3F][StateCSIEntry] = Entry{StateCSIParam, ActionCollectPrivate}
 
 	// === CSI PARAM state ===
 	for _, b := range []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
@@ -171,10 +172,8 @@ func init() {
 		stateTable[b][StateCSIParam] = Entry{StateGround, ActionCSIDispatch}
 	}
 	stateTable[0x7F][StateCSIParam] = Entry{StateCSIParam, ActionIgnore}
-	for b := 0x3C; b <= 0x3F; b++ {
-		if b != 0x3B { // 0x3B already handled as separator
-			stateTable[b][StateCSIParam] = Entry{StateCSIIgnore, ActionNone}
-		}
+	for b := 0x3C; b <= 0x3E; b++ {
+		stateTable[b][StateCSIParam] = Entry{StateCSIIgnore, ActionNone}
 	}
 
 	// === CSI INTERMEDIATE state ===
@@ -229,7 +228,7 @@ func init() {
 		stateTable[b][StateDCSEntry] = Entry{StateDCSPassthrough, ActionDCSHook}
 	}
 	stateTable[0x7F][StateDCSEntry] = Entry{StateDCSEntry, ActionIgnore}
-	for b := 0x3C; b <= 0x3F; b++ {
+	for b := 0x3C; b <= 0x3E; b++ {
 		stateTable[b][StateDCSEntry] = Entry{StateDCSIgnore, ActionNone}
 	}
 
@@ -251,7 +250,7 @@ func init() {
 		stateTable[b][StateDCSParam] = Entry{StateDCSPassthrough, ActionDCSHook}
 	}
 	stateTable[0x7F][StateDCSParam] = Entry{StateDCSParam, ActionIgnore}
-	for b := 0x3C; b <= 0x3F; b++ {
+	for b := 0x3C; b <= 0x3E; b++ {
 		stateTable[b][StateDCSParam] = Entry{StateDCSIgnore, ActionNone}
 	}
 
