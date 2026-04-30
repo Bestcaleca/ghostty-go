@@ -392,7 +392,7 @@ func (s *Surface) RenderGrid() {
 	defer s.mu.RUnlock()
 
 	grid := s.terminal.Grid()
-	cursorRow, cursorCol, _, _ := s.terminal.Cursor()
+	cursorRow, cursorCol, _, cursorStyle := s.terminal.Cursor()
 
 	// Update application cursor mode
 	s.keyH.SetApplicationCursorKeys(s.terminal.Active().Modes.QueryDecMode(terminal.ModeDecCKM))
@@ -454,7 +454,10 @@ func (s *Surface) RenderGrid() {
 	if s.scrollOffset > 0 {
 		cursorVisible = false
 	}
-	s.renderer.SetCursor(cursorRow, cursorCol, cursorVisible, renderer.CursorBlock)
+
+	// Convert terminal cursor style to renderer style
+	renCursorStyle := convertCursorStyle(cursorStyle)
+	s.renderer.SetCursor(cursorRow, cursorCol, cursorVisible, renCursorStyle)
 	s.renderer.DrawFrame(renderGrid)
 }
 
@@ -512,6 +515,20 @@ func encodeUTF8(r rune, buf []byte) int {
 		buf[2] = 0x80 | byte((r>>6)&0x3F)
 		buf[3] = 0x80 | byte(r&0x3F)
 		return 4
+	}
+}
+
+// convertCursorStyle converts terminal cursor style to renderer cursor style.
+func convertCursorStyle(style terminal.CursorStyle) renderer.CursorStyle {
+	switch style {
+	case terminal.CursorBlinkingBlock, terminal.CursorSteadyBlock, terminal.CursorDefault:
+		return renderer.CursorBlock
+	case terminal.CursorBlinkingUnderline, terminal.CursorSteadyUnderline:
+		return renderer.CursorUnderline
+	case terminal.CursorBlinkingBar, terminal.CursorSteadyBar:
+		return renderer.CursorBeam
+	default:
+		return renderer.CursorBlock
 	}
 }
 
