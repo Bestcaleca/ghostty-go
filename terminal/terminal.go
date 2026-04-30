@@ -3,6 +3,8 @@
 package terminal
 
 import (
+	"encoding/base64"
+	"fmt"
 	"sync"
 
 	"github.com/ghostty-go/ghostty-go/parser"
@@ -30,6 +32,11 @@ type Terminal struct {
 	// Current SGR state (applied to new characters)
 	CurrentStyle Style
 
+	// Callbacks
+	clipboardWrite func(clipboard string, data []byte) // write to system clipboard
+	clipboardRead  func(clipboard string) []byte        // read from system clipboard
+	respond        func(data []byte)                    // send data back to shell
+
 	mu sync.RWMutex
 }
 
@@ -45,6 +52,21 @@ func New(rows, cols int) *Terminal {
 		ScrollRegion: ScrollRegion{Top: 0, Bottom: rows},
 	}
 	return t
+}
+
+// SetClipboardWrite sets the callback for writing to the system clipboard.
+func (t *Terminal) SetClipboardWrite(fn func(clipboard string, data []byte)) {
+	t.clipboardWrite = fn
+}
+
+// SetClipboardRead sets the callback for reading from the system clipboard.
+func (t *Terminal) SetClipboardRead(fn func(clipboard string) []byte) {
+	t.clipboardRead = fn
+}
+
+// SetRespond sets the callback for sending data back to the shell (e.g., clipboard query responses).
+func (t *Terminal) SetRespond(fn func(data []byte)) {
+	t.respond = fn
 }
 
 // Resize resizes the terminal.
@@ -404,6 +426,33 @@ func (t *Terminal) OSCDispatch(cmd parser.OSCCommand) {
 		// ignore
 	case parser.OSCSetHyperlink:
 		// TODO: handle hyperlinks
+	case parser.OSCSetClipboard:
+		t.handleClipboard(c)
+	}
+}
+
+// handleClipboard handles OSC 52 clipboard operations.
+func (t *Terminal) handleClipboard(c parser.OSCSetClipboard) {
+	if c.Query {
+		// Query: request clipboard content
+		if t.clipboardRead != nil {
+			data := t.clipboardRead(c.Clipboard)
+			if len(data) > 0 {
+				// Send response: OSC 52 ; clipboard ; base64data ST
+				encoded := base64Encode(data)
+				response := fmt.Sprintf("\x1b]52;%s;%s\x1b\\", c.Clipboard, encoded)
+				if t.respond != nil {
+					t.respond([]byte(response))
+				}
+			}
+		}
+		return
+	}
+
+	// Set: write to clipboard
+	if len(c.Data) > 0 && t.clipboardWrite != nil {
+		decoded := base64Decode(c.Data)
+		t.clipboardWrite(c.Clipboard, decoded)
 	}
 }
 
@@ -898,4 +947,16 @@ func clamp(v, min, max int) int {
 		return max
 	}
 	return v
+}
+
+func base64Encode(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+func base64Decode(data []byte) []byte {
+	decoded, err := base64.StdEncoding.DecodeString(string(data))
+	if err != nil {
+		return nil
+	}
+	return decoded
 }

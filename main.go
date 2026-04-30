@@ -139,6 +139,7 @@ func run() error {
 		Cols:     cols,
 		Shell:    cfg.Shell,
 		Renderer: ren,
+		Window:   window,
 	})
 	if err != nil {
 		return fmt.Errorf("create surface: %w", err)

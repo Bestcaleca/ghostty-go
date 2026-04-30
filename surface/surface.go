@@ -22,6 +22,7 @@ type Surface struct {
 	keyH     *input.KeyHandler
 	mouseH   *input.MouseHandler
 	msgChan  chan termio.Message
+	window   *glfw.Window // for clipboard access
 
 	mu sync.RWMutex // protects terminal state during render
 
@@ -41,10 +42,11 @@ type Surface struct {
 
 // Config holds surface configuration.
 type Config struct {
-	Rows   int
-	Cols   int
-	Shell  string
+	Rows     int
+	Cols     int
+	Shell    string
 	Renderer *renderer.Renderer
+	Window   *glfw.Window
 }
 
 // New creates a new Surface.
@@ -69,6 +71,7 @@ func New(cfg Config) (*Surface, error) {
 		keyH:          input.NewKeyHandler(),
 		mouseH:        input.NewMouseHandler(),
 		msgChan:       msgChan,
+		window:        cfg.Window,
 		cursorVisible: true,
 		lastBlink:     time.Now(),
 		rows:          cfg.Rows,
@@ -80,6 +83,28 @@ func New(cfg Config) (*Surface, error) {
 
 // Start begins the IO goroutines.
 func (s *Surface) Start() {
+	// Set up clipboard callbacks
+	s.terminal.SetClipboardWrite(func(clipboard string, data []byte) {
+		if s.window != nil {
+			s.window.SetClipboardString(string(data))
+		}
+	})
+
+	s.terminal.SetClipboardRead(func(clipboard string) []byte {
+		if s.window == nil {
+			return nil
+		}
+		str := s.window.GetClipboardString()
+		if str == "" {
+			return nil
+		}
+		return []byte(str)
+	})
+
+	s.terminal.SetRespond(func(data []byte) {
+		s.termio.Write(data)
+	})
+
 	s.termio.Start()
 }
 
