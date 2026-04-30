@@ -69,6 +69,13 @@ func (t *Terminal) SetRespond(fn func(data []byte)) {
 	t.respond = fn
 }
 
+// BracketedPaste returns true if bracketed paste mode is enabled.
+func (t *Terminal) BracketedPaste() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.active.Modes.DecBracketedPaste
+}
+
 // Resize resizes the terminal.
 func (t *Terminal) Resize(rows, cols int) {
 	t.mu.Lock()

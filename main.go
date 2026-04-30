@@ -159,6 +159,16 @@ func run() error {
 
 	// Wire GLFW callbacks
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+		// Handle Ctrl+Shift+V for paste
+		if action == glfw.Press && key == glfw.KeyV &&
+			mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0 {
+			text := w.GetClipboardString()
+			if text != "" {
+				s.HandlePaste(text)
+			}
+			return
+		}
+
 		s.HandleKey(key, action, mods)
 	})
 

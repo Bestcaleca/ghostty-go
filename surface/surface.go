@@ -128,6 +128,26 @@ func (s *Surface) SetOnBell(fn func()) {
 	s.onBell = fn
 }
 
+// HandlePaste processes a paste event (e.g., Ctrl+Shift+V).
+// If bracketed paste mode is enabled, wraps the text in ESC[200~ ... ESC[201~.
+func (s *Surface) HandlePaste(text string) {
+	if text == "" {
+		return
+	}
+
+	data := []byte(text)
+	if s.terminal.BracketedPaste() {
+		// Wrap in bracketed paste sequences
+		wrapped := make([]byte, 0, len(data)+20)
+		wrapped = append(wrapped, []byte("\x1b[200~")...)
+		wrapped = append(wrapped, data...)
+		wrapped = append(wrapped, []byte("\x1b[201~")...)
+		s.termio.Write(wrapped)
+	} else {
+		s.termio.Write(data)
+	}
+}
+
 // HandleKey processes a GLFW key event.
 func (s *Surface) HandleKey(key glfw.Key, action glfw.Action, mods glfw.ModifierKey) {
 	m := input.Modifiers{
