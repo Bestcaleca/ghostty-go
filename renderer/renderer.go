@@ -401,6 +401,20 @@ func (r *Renderer) SetBGColor(c Color) {
 	gl.ClearColor(c.R, c.G, c.B, c.A)
 }
 
+// CellMetrics holds the dimensions of a single cell.
+type CellMetrics struct {
+	CellWidth  float32
+	CellHeight float32
+}
+
+// Metrics returns the cell dimensions.
+func (r *Renderer) Metrics() CellMetrics {
+	return CellMetrics{
+		CellWidth:  r.cellW,
+		CellHeight: r.cellH,
+	}
+}
+
 // Destroy cleans up GL resources.
 func (r *Renderer) Destroy() {
 	gl.DeleteBuffers(1, &r.bgVBO)
