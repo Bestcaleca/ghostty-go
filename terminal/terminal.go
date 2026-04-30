@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ghostty-go/ghostty-go/parser"
+	"github.com/ghostty-go/ghostty-go/unicode"
 )
 
 // ScrollRegion defines the scroll region boundaries.
@@ -849,31 +850,7 @@ func (t *Terminal) parseExtendedColor(a parser.CSIDispatchAction, start int) (Co
 
 // CharWidth returns the display width of a rune (0, 1, or 2).
 func CharWidth(r rune) int {
-	if r < 0x20 {
-		return 0
-	}
-	// Simple East Asian Width check
-	if isEastAsianWide(r) {
-		return 2
-	}
-	return 1
-}
-
-// isEastAsianWide checks if a rune is East Asian Wide.
-func isEastAsianWide(r rune) bool {
-	// Simplified check for common CJK ranges
-	return (r >= 0x1100 && r <= 0x115F) || // Hangul Jamo
-		(r >= 0x2E80 && r <= 0x303E) || // CJK Radicals
-		(r >= 0x3040 && r <= 0x33BF) || // Hiragana, Katakana, etc.
-		(r >= 0x3400 && r <= 0x4DBF) || // CJK Unified Ideographs Extension A
-		(r >= 0x4E00 && r <= 0x9FFF) || // CJK Unified Ideographs
-		(r >= 0xA000 && r <= 0xA4CF) || // Yi
-		(r >= 0xAC00 && r <= 0xD7AF) || // Hangul Syllables
-		(r >= 0xF900 && r <= 0xFAFF) || // CJK Compatibility Ideographs
-		(r >= 0xFE30 && r <= 0xFE6F) || // CJK Compatibility Forms
-		(r >= 0xFF00 && r <= 0xFF60) || // Fullwidth Forms
-		(r >= 0xFFE0 && r <= 0xFFE6) || // Fullwidth Signs
-		(r >= 0x20000 && r <= 0x2FA1F) // CJK Unified Ideographs Extension B-F
+	return unicode.RuneWidth(r)
 }
 
 func ansiColor(idx int) Color {
