@@ -30,6 +30,9 @@ type Surface struct {
 	cursorVisible bool
 	lastBlink     time.Time
 
+	// Viewport scrollback offset (0 = bottom/latest, positive = scrolled up)
+	scrollOffset int
+
 	// Callbacks
 	onTitleChange func(string)
 	onChildExit   func(int)
@@ -148,6 +151,28 @@ func (s *Surface) HandlePaste(text string) {
 	}
 }
 
+// ScrollUp scrolls the viewport up by n lines (into scrollback).
+func (s *Surface) ScrollUp(n int) {
+	maxScroll := s.terminal.ScrollbackLen()
+	s.scrollOffset += n
+	if s.scrollOffset > maxScroll {
+		s.scrollOffset = maxScroll
+	}
+}
+
+// ScrollDown scrolls the viewport down by n lines (toward current).
+func (s *Surface) ScrollDown(n int) {
+	s.scrollOffset -= n
+	if s.scrollOffset < 0 {
+		s.scrollOffset = 0
+	}
+}
+
+// ScrollToBottom resets the viewport to the current output.
+func (s *Surface) ScrollToBottom() {
+	s.scrollOffset = 0
+}
+
 // HandleKey processes a GLFW key event.
 func (s *Surface) HandleKey(key glfw.Key, action glfw.Action, mods glfw.ModifierKey) {
 	m := input.Modifiers{
@@ -195,10 +220,26 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 }
 
 // HandleScroll processes a GLFW scroll event.
-func (s *Surface) HandleScroll(xoff, yoff float64, x, y float64) {
+func (s *Surface) HandleScroll(xoff, yoff float64, x, y float64, mods glfw.ModifierKey) {
 	if s.renderer == nil {
 		return
 	}
+
+	// Shift+scroll = viewport scroll through scrollback
+	if mods&glfw.ModShift != 0 {
+		if yoff > 0 {
+			s.ScrollUp(int(yoff * 3))
+		} else if yoff < 0 {
+			s.ScrollDown(int(-yoff * 3))
+		}
+		return
+	}
+
+	// Auto-scroll to bottom on any scroll event
+	if s.scrollOffset > 0 {
+		s.ScrollToBottom()
+	}
+
 	metrics := s.renderer.Metrics()
 	col := int(x / float64(metrics.CellWidth))
 	row := int(y / float64(metrics.CellHeight))
@@ -276,12 +317,39 @@ func (s *Surface) RenderGrid() {
 	// Update application cursor mode
 	s.keyH.SetApplicationCursorKeys(s.terminal.Active().Modes.QueryDecMode(terminal.ModeDecCKM))
 
+	// Build full render grid including scrollback
+	var fullGrid [][]terminal.Cell
+	if s.scrollOffset > 0 {
+		scrollback := s.terminal.ScrollbackRows()
+		sbLen := len(scrollback)
+
+		// Calculate how many scrollback lines to show
+		offset := s.scrollOffset
+		if offset > sbLen {
+			offset = sbLen
+		}
+
+		// Take the last 'offset' lines from scrollback
+		start := sbLen - offset
+		for _, row := range scrollback[start:] {
+			fullGrid = append(fullGrid, row.Cells)
+		}
+		fullGrid = append(fullGrid, grid...)
+
+		// Trim to screen size
+		if len(fullGrid) > s.rows {
+			fullGrid = fullGrid[len(fullGrid)-s.rows:]
+		}
+	} else {
+		fullGrid = grid
+	}
+
 	// Convert terminal grid to renderer cells
-	renderGrid := make([][]renderer.Cell, len(grid))
-	for row := range grid {
-		renderGrid[row] = make([]renderer.Cell, len(grid[row]))
-		for col := range grid[row] {
-			c := grid[row][col]
+	renderGrid := make([][]renderer.Cell, len(fullGrid))
+	for row := range fullGrid {
+		renderGrid[row] = make([]renderer.Cell, len(fullGrid[row]))
+		for col := range fullGrid[row] {
+			c := fullGrid[row][col]
 			style := s.terminal.Active().Styles.Lookup(c.Style)
 
 			fg := styleToColor(style.FG, renderer.Color{R: 0.9, G: 0.9, B: 0.9, A: 1.0})
@@ -296,9 +364,18 @@ func (s *Surface) RenderGrid() {
 		}
 	}
 
+	// Hide cursor when scrolled back
 	cursorVisible := s.UpdateCursor()
+	if s.scrollOffset > 0 {
+		cursorVisible = false
+	}
 	s.renderer.SetCursor(cursorRow, cursorCol, cursorVisible, renderer.CursorBlock)
 	s.renderer.DrawFrame(renderGrid)
+}
+
+// Rows returns the number of visible rows.
+func (s *Surface) Rows() int {
+	return s.rows
 }
 
 // Terminal returns the underlying terminal (for testing).

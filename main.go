@@ -159,14 +159,34 @@ func run() error {
 
 	// Wire GLFW callbacks
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		// Handle Ctrl+Shift+V for paste
-		if action == glfw.Press && key == glfw.KeyV &&
-			mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0 {
-			text := w.GetClipboardString()
-			if text != "" {
-				s.HandlePaste(text)
+		if action == glfw.Press {
+			// Ctrl+Shift+V = paste
+			if key == glfw.KeyV &&
+				mods&glfw.ModControl != 0 && mods&glfw.ModShift != 0 {
+				text := w.GetClipboardString()
+				if text != "" {
+					s.HandlePaste(text)
+				}
+				return
 			}
-			return
+
+			// Shift+PageUp = scroll up
+			if key == glfw.KeyPageUp && mods&glfw.ModShift != 0 {
+				s.ScrollUp(s.Rows() / 2)
+				return
+			}
+
+			// Shift+PageDown = scroll down
+			if key == glfw.KeyPageDown && mods&glfw.ModShift != 0 {
+				s.ScrollDown(s.Rows() / 2)
+				return
+			}
+
+			// Home = scroll to bottom
+			if key == glfw.KeyHome && mods&glfw.ModShift != 0 {
+				s.ScrollToBottom()
+				return
+			}
 		}
 
 		s.HandleKey(key, action, mods)
@@ -183,7 +203,13 @@ func run() error {
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff, yoff float64) {
 		x, y := w.GetCursorPos()
-		s.HandleScroll(xoff, yoff, x, y)
+		// Get current modifier state
+		mods := w.GetKey(glfw.KeyLeftShift) == glfw.Press || w.GetKey(glfw.KeyRightShift) == glfw.Press
+		var mod glfw.ModifierKey
+		if mods {
+			mod = glfw.ModShift
+		}
+		s.HandleScroll(xoff, yoff, x, y, mod)
 	})
 
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width, height int) {

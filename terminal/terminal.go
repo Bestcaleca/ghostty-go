@@ -76,6 +76,20 @@ func (t *Terminal) BracketedPaste() bool {
 	return t.active.Modes.DecBracketedPaste
 }
 
+// ScrollbackLen returns the number of lines in the scrollback buffer.
+func (t *Terminal) ScrollbackLen() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return len(t.active.Scrollback)
+}
+
+// ScrollbackRows returns the scrollback buffer rows.
+func (t *Terminal) ScrollbackRows() []Row {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.active.Scrollback
+}
+
 // Resize resizes the terminal.
 func (t *Terminal) Resize(rows, cols int) {
 	t.mu.Lock()
