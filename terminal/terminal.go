@@ -40,6 +40,7 @@ type Terminal struct {
 	clipboardWrite func(clipboard string, data []byte) // write to system clipboard
 	clipboardRead  func(clipboard string) []byte        // read from system clipboard
 	respond        func(data []byte)                    // send data back to shell
+	bell           func()                               // terminal bell
 
 	mu sync.RWMutex
 }
@@ -71,6 +72,11 @@ func (t *Terminal) SetClipboardRead(fn func(clipboard string) []byte) {
 // SetRespond sets the callback for sending data back to the shell (e.g., clipboard query responses).
 func (t *Terminal) SetRespond(fn func(data []byte)) {
 	t.respond = fn
+}
+
+// SetBell sets the callback for terminal bell.
+func (t *Terminal) SetBell(fn func()) {
+	t.bell = fn
 }
 
 // BracketedPaste returns true if bracketed paste mode is enabled.
@@ -300,7 +306,9 @@ func (t *Terminal) Execute(b byte) {
 
 	switch b {
 	case 0x07: // BEL - bell
-		// TODO: notify bell
+		if t.bell != nil {
+			t.bell()
+		}
 	case 0x08: // BS - backspace
 		t.backspace()
 	case 0x09: // HT - horizontal tab

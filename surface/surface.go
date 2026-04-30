@@ -42,6 +42,10 @@ type Surface struct {
 	lastClickCol  int
 	clickCount    int
 
+	// Bell state
+	visualBell bool
+	bellTime   time.Time
+
 	// Callbacks
 	onTitleChange func(string)
 	onChildExit   func(int)
@@ -115,6 +119,14 @@ func (s *Surface) Start() {
 
 	s.terminal.SetRespond(func(data []byte) {
 		s.termio.Write(data)
+	})
+
+	s.terminal.SetBell(func() {
+		if s.onBell != nil {
+			s.onBell()
+		}
+		s.visualBell = true
+		s.bellTime = time.Now()
 	})
 
 	s.termio.Start()
@@ -458,7 +470,27 @@ func (s *Surface) RenderGrid() {
 	// Convert terminal cursor style to renderer style
 	renCursorStyle := convertCursorStyle(cursorStyle)
 	s.renderer.SetCursor(cursorRow, cursorCol, cursorVisible, renCursorStyle)
-	s.renderer.DrawFrame(renderGrid)
+
+	// Visual bell effect: briefly flash the screen
+	if s.visualBell {
+		if time.Since(s.bellTime) < 100*time.Millisecond {
+			// Invert background for visual bell
+			origBG := s.renderer.BGColor()
+			s.renderer.SetBGColor(renderer.Color{
+				R: 1.0 - origBG.R,
+				G: 1.0 - origBG.G,
+				B: 1.0 - origBG.B,
+				A: origBG.A,
+			})
+			s.renderer.DrawFrame(renderGrid)
+			s.renderer.SetBGColor(origBG)
+		} else {
+			s.visualBell = false
+			s.renderer.DrawFrame(renderGrid)
+		}
+	} else {
+		s.renderer.DrawFrame(renderGrid)
+	}
 }
 
 // Rows returns the number of visible rows.

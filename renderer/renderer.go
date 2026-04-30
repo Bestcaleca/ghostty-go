@@ -401,6 +401,11 @@ func (r *Renderer) SetBGColor(c Color) {
 	gl.ClearColor(c.R, c.G, c.B, c.A)
 }
 
+// BGColor returns the current background color.
+func (r *Renderer) BGColor() Color {
+	return r.bgColor
+}
+
 // CellMetrics holds the dimensions of a single cell.
 type CellMetrics struct {
 	CellWidth  float32
