@@ -14,6 +14,7 @@ type Screen struct {
 
 	Scrollback []Row   // scrollback buffer
 	MaxScroll  int     // max scrollback lines
+	Selection  Selection
 }
 
 // NewScreen creates a new screen with the given dimensions.

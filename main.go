@@ -201,6 +201,10 @@ func run() error {
 		s.HandleMouseButton(button, action, mods, x, y)
 	})
 
+	window.SetCursorPosCallback(func(w *glfw.Window, x, y float64) {
+		s.HandleMouseMotion(x, y)
+	})
+
 	window.SetScrollCallback(func(w *glfw.Window, xoff, yoff float64) {
 		x, y := w.GetCursorPos()
 		// Get current modifier state

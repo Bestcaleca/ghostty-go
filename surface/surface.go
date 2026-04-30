@@ -35,6 +35,13 @@ type Surface struct {
 	// Viewport scrollback offset (0 = bottom/latest, positive = scrolled up)
 	scrollOffset int
 
+	// Selection state
+	selecting     bool
+	lastClickTime time.Time
+	lastClickRow  int
+	lastClickCol  int
+	clickCount    int
+
 	// Callbacks
 	onTitleChange func(string)
 	onChildExit   func(int)
@@ -200,11 +207,6 @@ func (s *Surface) HandleChar(char rune) {
 
 // HandleMouseButton processes a GLFW mouse button event.
 func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey, x, y float64) {
-	if action != glfw.Press {
-		return
-	}
-
-	// Convert pixel coordinates to cell coordinates
 	if s.renderer == nil {
 		return
 	}
@@ -212,13 +214,56 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 	col := int(x / float64(metrics.CellWidth))
 	row := int(y / float64(metrics.CellHeight))
 
-	// Ctrl+Click on hyperlink: open URL
-	if mods&glfw.ModControl != 0 && button == glfw.MouseButtonLeft {
-		url := s.GetHyperlink(row, col)
-		if url != "" {
-			openURL(url)
+	if button == glfw.MouseButtonLeft {
+		if action == glfw.Press {
+			// Ctrl+Click on hyperlink: open URL
+			if mods&glfw.ModControl != 0 {
+				url := s.GetHyperlink(row, col)
+				if url != "" {
+					openURL(url)
+					return
+				}
+			}
+
+			// Check for double/triple click
+			now := time.Now()
+			if now.Sub(s.lastClickTime) < 300*time.Millisecond &&
+				s.lastClickRow == row && s.lastClickCol == col {
+				s.clickCount++
+			} else {
+				s.clickCount = 1
+			}
+			s.lastClickTime = now
+			s.lastClickRow = row
+			s.lastClickCol = col
+
+			// Start selection
+			switch s.clickCount {
+			case 2:
+				s.terminal.SelectionStart(row, col, terminal.SelectionWord)
+			case 3:
+				s.terminal.SelectionStart(row, col, terminal.SelectionLine)
+			default:
+				s.terminal.SelectionStart(row, col, terminal.SelectionChar)
+			}
+			s.selecting = true
 			return
 		}
+
+		// Release: copy selection to clipboard
+		if action == glfw.Release && s.selecting {
+			s.selecting = false
+			text := s.terminal.GetSelectedText()
+			if text != "" && s.window != nil {
+				s.window.SetClipboardString(text)
+			}
+			return
+		}
+	}
+
+	// Right/middle click: clear selection and send to terminal
+	if action == glfw.Press {
+		s.terminal.SelectionClear()
 	}
 
 	m := input.Modifiers{
@@ -231,6 +276,20 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 	seq := s.mouseH.EncodeMouseButton(button, action, m, col, row)
 	if seq != nil {
 		s.termio.Write(seq)
+	}
+}
+
+// HandleMouseMotion processes a GLFW mouse motion event.
+func (s *Surface) HandleMouseMotion(x, y float64) {
+	if s.renderer == nil {
+		return
+	}
+
+	if s.selecting {
+		metrics := s.renderer.Metrics()
+		col := int(x / float64(metrics.CellWidth))
+		row := int(y / float64(metrics.CellHeight))
+		s.terminal.SelectionUpdate(row, col)
 	}
 }
 
@@ -369,6 +428,11 @@ func (s *Surface) RenderGrid() {
 
 			fg := styleToColor(style.FG, renderer.Color{R: 0.9, G: 0.9, B: 0.9, A: 1.0})
 			bg := styleToColor(style.BG, renderer.Color{R: 0.1, G: 0.1, B: 0.12, A: 1.0})
+
+			// Highlight selected cells
+			if s.terminal.SelectionIsSelected(row, col) {
+				fg, bg = bg, fg // swap colors for selection
+			}
 
 			renderGrid[row][col] = renderer.Cell{
 				Char:  c.Char,

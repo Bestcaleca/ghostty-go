@@ -93,6 +93,61 @@ func (t *Terminal) ScrollbackRows() []Row {
 	return t.active.Scrollback
 }
 
+// SelectionStart begins a text selection.
+func (t *Terminal) SelectionStart(row, col int, mode SelectionMode) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.active.Selection.Start(row, col, mode)
+}
+
+// SelectionUpdate extends the selection.
+func (t *Terminal) SelectionUpdate(row, col int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	sel := &t.active.Selection
+	sel.Update(row, col)
+
+	// For word selection, snap to word boundaries
+	if sel.SelectionMode == SelectionWord && sel.Active {
+		cells := t.active.Rows
+		if row >= 0 && row < len(cells) {
+			start, end := findWordBoundaries(cells[row].Cells, col)
+			if row == sel.StartRow {
+				sel.StartCol = start
+			}
+			sel.EndCol = end
+		}
+	}
+
+	// For line selection, select full line
+	if sel.SelectionMode == SelectionLine && sel.Active {
+		sel.StartCol = 0
+		sel.EndCol = t.Cols
+	}
+}
+
+// SelectionClear clears the selection.
+func (t *Terminal) SelectionClear() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.active.Selection.Clear()
+}
+
+// SelectionIsActive returns whether a selection is active.
+func (t *Terminal) SelectionIsActive() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.active.Selection.Active
+}
+
+// SelectionIsSelected returns true if the given cell is within the selection.
+func (t *Terminal) SelectionIsSelected(row, col int) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.active.Selection.IsSelected(row, col)
+}
+
 // Resize resizes the terminal.
 func (t *Terminal) Resize(rows, cols int) {
 	t.mu.Lock()
