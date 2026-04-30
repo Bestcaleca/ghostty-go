@@ -266,6 +266,9 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 		s.terminal.SelectionClear()
 	}
 
+	// Update mouse mode from terminal state
+	s.mouseH.SetMode(s.terminal.MouseMode())
+
 	m := input.Modifiers{
 		Shift:   mods&glfw.ModShift != 0,
 		Control: mods&glfw.ModControl != 0,
@@ -313,6 +316,9 @@ func (s *Surface) HandleScroll(xoff, yoff float64, x, y float64, mods glfw.Modif
 	if s.scrollOffset > 0 {
 		s.ScrollToBottom()
 	}
+
+	// Update mouse mode from terminal state
+	s.mouseH.SetMode(s.terminal.MouseMode())
 
 	metrics := s.renderer.Metrics()
 	col := int(x / float64(metrics.CellWidth))

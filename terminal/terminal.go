@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ghostty-go/ghostty-go/input"
 	"github.com/ghostty-go/ghostty-go/parser"
 	"github.com/ghostty-go/ghostty-go/unicode"
 )
@@ -91,6 +92,27 @@ func (t *Terminal) ScrollbackRows() []Row {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.active.Scrollback
+}
+
+// MouseMode returns the current mouse tracking mode.
+func (t *Terminal) MouseMode() input.MouseMode {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	m := t.active.Modes
+	if m.DecMouseAny {
+		return input.MouseModeAny
+	}
+	if m.DecMouseButton {
+		return input.MouseModeButton
+	}
+	if m.DecMouseNormal {
+		return input.MouseModeNormal
+	}
+	if m.DecMouseX10 {
+		return input.MouseModeX10
+	}
+	return input.MouseModeNone
 }
 
 // SelectionStart begins a text selection.
