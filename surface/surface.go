@@ -31,6 +31,7 @@ type Surface struct {
 	// Cursor blink state
 	cursorVisible bool
 	lastBlink     time.Time
+	cursorBlink   bool
 
 	// Viewport scrollback offset (0 = bottom/latest, positive = scrolled up)
 	scrollOffset int
@@ -68,6 +69,7 @@ type Config struct {
 	Renderer        *renderer.Renderer
 	Window          *glfw.Window
 	ScrollbackLines int
+	CursorBlink     bool
 }
 
 // New creates a new Surface.
@@ -98,6 +100,7 @@ func New(cfg Config) (*Surface, error) {
 		window:        cfg.Window,
 		cursorVisible: true,
 		lastBlink:     time.Now(),
+		cursorBlink:   cfg.CursorBlink,
 		rows:          cfg.Rows,
 		cols:          cfg.Cols,
 		mouseButtons:  make(map[glfw.MouseButton]bool),
@@ -515,7 +518,11 @@ func (s *Surface) ProcessMessages() {
 }
 
 // UpdateCursor updates cursor blink state and returns whether it should be visible.
-func (s *Surface) UpdateCursor() bool {
+func (s *Surface) UpdateCursor(style terminal.CursorStyle) bool {
+	if !cursorBlinkEnabled(style, s.cursorBlink) {
+		s.cursorVisible = true
+		return true
+	}
 	if time.Since(s.lastBlink) > 500*time.Millisecond {
 		s.cursorVisible = !s.cursorVisible
 		s.lastBlink = time.Now()
@@ -525,6 +532,18 @@ func (s *Surface) UpdateCursor() bool {
 
 func cursorVisibleForRender(terminalVisible, blinkVisible bool, scrollOffset int) bool {
 	return terminalVisible && blinkVisible && scrollOffset == 0
+}
+
+func cursorBlinkEnabled(style terminal.CursorStyle, configBlink bool) bool {
+	if !configBlink {
+		return false
+	}
+	switch style {
+	case terminal.CursorSteadyBlock, terminal.CursorSteadyUnderline, terminal.CursorSteadyBar:
+		return false
+	default:
+		return true
+	}
 }
 
 // RenderGrid converts the terminal grid to renderer cells and draws a frame.
@@ -599,7 +618,7 @@ func (s *Surface) RenderGrid() {
 
 	applyContextMenuOverlay(renderGrid, s.contextMenu)
 
-	cursorVisible := cursorVisibleForRender(terminalCursorVisible, s.UpdateCursor(), s.scrollOffset)
+	cursorVisible := cursorVisibleForRender(terminalCursorVisible, s.UpdateCursor(cursorStyle), s.scrollOffset)
 
 	// Convert terminal cursor style to renderer style
 	renCursorStyle := convertCursorStyle(cursorStyle)

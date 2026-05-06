@@ -78,6 +78,13 @@
 - 已让新屏幕默认 cursor visible mode 与实际 cursor 可见状态一致。
 - 已增加终端光标显示隐藏、surface 渲染可见性组合的回归测试。
 
+### 2026-05-06 Phase 0 第十批
+
+- 已让配置项 `cursor-blink` 接入 surface 光标闪烁逻辑，不再只是配置文件里的空字段。
+- 已让 `DECSCUSR` 的 steady cursor style 停止闪烁，blinking style 仍受 `cursor-blink` 总开关控制。
+- 已保留滚动查看 scrollback 时隐藏光标的行为，并把终端可见性、blink 状态、scrollback 状态合并为统一判断。
+- 已增加光标闪烁策略和渲染可见性组合的回归测试。
+
 ## P0：终端基础能力
 
 这些能力是 AI 功能上线前的地基。地基不稳，Agent 只会放大问题。

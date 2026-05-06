@@ -168,6 +168,7 @@ func run() error {
 		Renderer:        ren,
 		Window:          window,
 		ScrollbackLines: cfg.ScrollbackLines,
+		CursorBlink:     cfg.CursorBlink,
 	})
 	if err != nil {
 		return fmt.Errorf("create surface: %w", err)

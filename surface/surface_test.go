@@ -196,3 +196,21 @@ func TestCursorVisibleForRenderRequiresTerminalVisibility(t *testing.T) {
 		t.Fatal("visible terminal cursor should render when blink is visible and not scrolled back")
 	}
 }
+
+func TestCursorBlinkEnabledForStyle(t *testing.T) {
+	if !cursorBlinkEnabled(terminal.CursorDefault, true) {
+		t.Fatal("default cursor should blink when config enables blinking")
+	}
+	if cursorBlinkEnabled(terminal.CursorDefault, false) {
+		t.Fatal("default cursor should not blink when config disables blinking")
+	}
+	if cursorBlinkEnabled(terminal.CursorSteadyBlock, true) {
+		t.Fatal("steady cursor style should not blink")
+	}
+	if !cursorBlinkEnabled(terminal.CursorBlinkingBar, true) {
+		t.Fatal("blinking cursor style should blink when config enables blinking")
+	}
+	if cursorBlinkEnabled(terminal.CursorBlinkingUnderline, false) {
+		t.Fatal("config should be able to disable blinking cursor styles")
+	}
+}
