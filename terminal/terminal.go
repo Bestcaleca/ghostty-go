@@ -902,15 +902,20 @@ func (t *Terminal) fullReset() {
 }
 
 func (t *Terminal) switchToAltScreen() {
-	if t.alternate == nil {
-		t.alternate = NewScreen(t.Rows, t.Cols)
-	}
+	t.alternate = newAlternateScreen(t.Rows, t.Cols)
 	t.active = t.alternate
 	t.active.Cursor = Cursor{Visible: true}
 }
 
 func (t *Terminal) switchToPrimaryScreen() {
 	t.active = t.primary
+}
+
+func newAlternateScreen(rows, cols int) *Screen {
+	s := NewScreen(rows, cols)
+	s.MaxScroll = 0
+	s.ScrollbackEnabled = false
+	return s
 }
 
 func (t *Terminal) setMode(a parser.CSIDispatchAction) {

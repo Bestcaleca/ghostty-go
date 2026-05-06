@@ -16,17 +16,20 @@ type Screen struct {
 	Scrollback []Row // scrollback buffer
 	MaxScroll  int   // max scrollback lines
 	Selection  Selection
+
+	ScrollbackEnabled bool
 }
 
 // NewScreen creates a new screen with the given dimensions.
 func NewScreen(rows, cols int) *Screen {
 	s := &Screen{
-		Rows:      make([]Row, rows),
-		Styles:    NewStyleTable(),
-		Tabstops:  NewTabstops(cols),
-		Charset:   NewCharsetState(),
-		Cursor:    Cursor{Visible: true},
-		MaxScroll: 10000,
+		Rows:              make([]Row, rows),
+		Styles:            NewStyleTable(),
+		Tabstops:          NewTabstops(cols),
+		Charset:           NewCharsetState(),
+		Cursor:            Cursor{Visible: true},
+		MaxScroll:         10000,
+		ScrollbackEnabled: true,
 	}
 	for i := range s.Rows {
 		s.Rows[i] = NewRow(cols, s.Styles.DefaultID())
@@ -92,7 +95,7 @@ func (s *Screen) ScrollUp(top, bottom, n int) {
 	width := s.Width()
 
 	// Move lines to scrollback if scrolling the full screen
-	if top == 0 && bottom == len(s.Rows) {
+	if s.ScrollbackEnabled && top == 0 && bottom == len(s.Rows) {
 		for i := 0; i < n && i < len(s.Rows); i++ {
 			scrollRow := s.Rows[i]
 			scrollRow.Wrapped = false

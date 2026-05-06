@@ -522,6 +522,62 @@ func TestTerminalAltScreen1049RestoresPrimaryCursor(t *testing.T) {
 	}
 }
 
+func TestTerminalAltScreen1049StartsFreshEachEntry(t *testing.T) {
+	term := newTestTerminal(24, 80)
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{1049},
+		ParamCount: 1,
+	})
+	term.Print('X')
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'l',
+		Private:    true,
+		Params:     [24]uint16{1049},
+		ParamCount: 1,
+	})
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{1049},
+		ParamCount: 1,
+	})
+
+	grid := term.Grid()
+	if grid[0][0].Char != ' ' {
+		t.Fatalf("alternate screen retained stale char %q, want blank", grid[0][0].Char)
+	}
+}
+
+func TestTerminalAltScreenDoesNotCollectScrollback(t *testing.T) {
+	term := newTestTerminal(2, 5)
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{1049},
+		ParamCount: 1,
+	})
+	for _, ch := range []rune{'A', '\n', '\r', 'B', '\n', '\r', 'C'} {
+		if ch == '\n' {
+			term.Execute(0x0A)
+			continue
+		}
+		if ch == '\r' {
+			term.Execute(0x0D)
+			continue
+		}
+		term.Print(ch)
+	}
+
+	if got := term.ScrollbackLen(); got != 0 {
+		t.Fatalf("alternate scrollback len = %d, want 0", got)
+	}
+}
+
 // TestStreamEndToEnd tests the full pipeline: raw bytes -> parser -> terminal
 func TestStreamEndToEnd(t *testing.T) {
 	term := newTestTerminal(24, 80)
