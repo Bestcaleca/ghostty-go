@@ -20,10 +20,13 @@ type Color struct {
 
 // Cell represents a single terminal cell for rendering.
 type Cell struct {
-	Char  rune
-	FG    Color
-	BG    Color
-	Width int // 1 for normal, 2 for wide
+	Char          rune
+	FG            Color
+	BG            Color
+	Width         int // 1 for normal, 2 for wide
+	Underline     bool
+	Strikethrough bool
+	Overline      bool
 }
 
 // CursorStyle represents cursor display mode.
@@ -40,19 +43,22 @@ type Renderer struct {
 	window *glfw.Window
 
 	// Shader programs
-	bgProg     uint32
-	textProg   uint32
-	cursorProg uint32
+	bgProg         uint32
+	textProg       uint32
+	decorationProg uint32
+	cursorProg     uint32
 
 	// VAOs
-	bgVAO     uint32
-	textVAO   uint32
-	cursorVAO uint32
+	bgVAO         uint32
+	textVAO       uint32
+	decorationVAO uint32
+	cursorVAO     uint32
 
 	// VBOs
-	bgVBO     uint32
-	textVBO   uint32
-	cursorVBO uint32
+	bgVBO         uint32
+	textVBO       uint32
+	decorationVBO uint32
+	cursorVBO     uint32
 
 	// Atlas texture
 	atlasTex   uint32
@@ -79,8 +85,9 @@ type Renderer struct {
 	bgColor Color
 
 	// Instance data buffers (CPU-side)
-	bgData   []float32 // per-cell: col, row, r, g, b, a
-	textData []float32 // per-cell: atlasX, atlasY, glyphW, glyphH, bearingX, bearingY, col, row, r, g, b, a
+	bgData         []float32 // per-cell: col, row, r, g, b, a
+	textData       []float32 // per-cell: atlasX, atlasY, glyphW, glyphH, bearingX, bearingY, col, row, r, g, b, a
+	decorationData []float32 // per-line: col, row, y offset, thickness, r, g, b, a
 
 	// Cursor
 	cursorRow int
@@ -109,22 +116,23 @@ type Config struct {
 // New creates a new Renderer. Must be called from the main thread with a current GL context.
 func New(cfg Config) *Renderer {
 	r := &Renderer{
-		cellW:      cfg.CellWidth,
-		cellH:      cfg.CellHeight,
-		cellAscent: cfg.CellAscent,
-		gridCols:   cfg.GridCols,
-		gridRows:   cfg.GridRows,
-		screenW:    cfg.Width,
-		screenH:    cfg.Height,
-		paddingX:   cfg.PaddingX,
-		paddingY:   cfg.PaddingY,
-		bgColor:    cfg.BGColor,
-		cursorClr:  cfg.CursorColor,
-		cursorSty:  cfg.CursorStyle,
-		cursorVis:  true,
-		atlas:      font.NewAtlas(font.DefaultAtlasWidth, font.DefaultAtlasHeight),
-		bgData:     make([]float32, 0, cfg.GridCols*cfg.GridRows*6),
-		textData:   make([]float32, 0, cfg.GridCols*cfg.GridRows*12),
+		cellW:          cfg.CellWidth,
+		cellH:          cfg.CellHeight,
+		cellAscent:     cfg.CellAscent,
+		gridCols:       cfg.GridCols,
+		gridRows:       cfg.GridRows,
+		screenW:        cfg.Width,
+		screenH:        cfg.Height,
+		paddingX:       cfg.PaddingX,
+		paddingY:       cfg.PaddingY,
+		bgColor:        cfg.BGColor,
+		cursorClr:      cfg.CursorColor,
+		cursorSty:      cfg.CursorStyle,
+		cursorVis:      true,
+		atlas:          font.NewAtlas(font.DefaultAtlasWidth, font.DefaultAtlasHeight),
+		bgData:         make([]float32, 0, cfg.GridCols*cfg.GridRows*6),
+		textData:       make([]float32, 0, cfg.GridCols*cfg.GridRows*12),
+		decorationData: make([]float32, 0, cfg.GridCols*cfg.GridRows*8),
 	}
 
 	r.initShaders()
@@ -149,6 +157,10 @@ func (r *Renderer) initShaders() {
 	r.textProg, err = CompileProgram(textVertSrc, textFragSrc)
 	if err != nil {
 		panic(fmt.Sprintf("text shader: %v", err))
+	}
+	r.decorationProg, err = CompileProgram(decorationVertSrc, decorationFragSrc)
+	if err != nil {
+		panic(fmt.Sprintf("decoration shader: %v", err))
 	}
 	r.cursorProg, err = CompileProgram(cursorVertSrc, cursorFragSrc)
 	if err != nil {
@@ -194,6 +206,20 @@ func (r *Renderer) initBuffers() {
 	gl.EnableVertexAttribArray(4)
 	gl.VertexAttribPointerWithOffset(4, 4, gl.FLOAT, false, stride, 32) // color
 	gl.VertexAttribDivisor(4, 1)
+	gl.BindVertexArray(0)
+
+	// Decorations: underline/strike/overline rectangles, instanced
+	gl.GenVertexArrays(1, &r.decorationVAO)
+	gl.GenBuffers(1, &r.decorationVBO)
+	gl.BindVertexArray(r.decorationVAO)
+	gl.BindBuffer(gl.ARRAY_BUFFER, r.decorationVBO)
+	// Per-instance: line_rect (vec4) + color (vec4) = 8 floats = 32 bytes
+	gl.EnableVertexAttribArray(0)
+	gl.VertexAttribPointerWithOffset(0, 4, gl.FLOAT, false, 32, 0)
+	gl.VertexAttribDivisor(0, 1)
+	gl.EnableVertexAttribArray(1)
+	gl.VertexAttribPointerWithOffset(1, 4, gl.FLOAT, false, 32, 16)
+	gl.VertexAttribDivisor(1, 1)
 	gl.BindVertexArray(0)
 
 	// Cursor: 1 VAO + 1 VBO, instanced
@@ -321,6 +347,23 @@ func (r *Renderer) DrawFrame(grid [][]Cell) {
 		gl.Disable(gl.BLEND)
 	}
 
+	// Draw text decorations after glyphs so strikethrough stays visible.
+	decorationCount := r.buildDecorationData(grid)
+	if decorationCount > 0 {
+		gl.UseProgram(r.decorationProg)
+		projLoc := gl.GetUniformLocation(r.decorationProg, gl.Str("projection\x00"))
+		gl.UniformMatrix4fv(projLoc, 1, false, &r.proj[0])
+		cellSizeLoc := gl.GetUniformLocation(r.decorationProg, gl.Str("cell_size\x00"))
+		gl.Uniform2f(cellSizeLoc, r.cellW, r.cellH)
+		paddingLoc := gl.GetUniformLocation(r.decorationProg, gl.Str("padding\x00"))
+		gl.Uniform2f(paddingLoc, r.paddingX, r.paddingY)
+
+		gl.BindVertexArray(r.decorationVAO)
+		gl.BindBuffer(gl.ARRAY_BUFFER, r.decorationVBO)
+		gl.BufferData(gl.ARRAY_BUFFER, len(r.decorationData)*4, unsafe.Pointer(&r.decorationData[0]), gl.DYNAMIC_DRAW)
+		gl.DrawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, int32(decorationCount))
+	}
+
 	// Draw cursor
 	if r.cursorVis {
 		r.drawCursor()
@@ -379,6 +422,44 @@ func (r *Renderer) buildTextData(grid [][]Cell) int {
 	return len(r.textData) / 12
 }
 
+func (r *Renderer) buildDecorationData(grid [][]Cell) int {
+	r.decorationData = r.decorationData[:0]
+	cols := r.gridCols
+	rows := r.gridRows
+	thickness := decorationThickness(r.cellH)
+
+	for row := 0; row < rows && row < len(grid); row++ {
+		for col := 0; col < cols && col < len(grid[row]); col++ {
+			c := grid[row][col]
+			if c.Overline {
+				r.appendDecoration(col, row, 0, thickness, c.FG)
+			}
+			if c.Strikethrough {
+				r.appendDecoration(col, row, r.cellH*0.55, thickness, c.FG)
+			}
+			if c.Underline {
+				r.appendDecoration(col, row, r.cellH-thickness-1, thickness, c.FG)
+			}
+		}
+	}
+	return len(r.decorationData) / 8
+}
+
+func (r *Renderer) appendDecoration(col, row int, yOffset, thickness float32, color Color) {
+	r.decorationData = append(r.decorationData,
+		float32(col), float32(row), yOffset, thickness,
+		color.R, color.G, color.B, color.A,
+	)
+}
+
+func decorationThickness(cellHeight float32) float32 {
+	thickness := cellHeight / 12
+	if thickness < 1 {
+		return 1
+	}
+	return thickness
+}
+
 func (r *Renderer) drawCursor() {
 	gl.UseProgram(r.cursorProg)
 	projLoc := gl.GetUniformLocation(r.cursorProg, gl.Str("projection\x00"))
@@ -428,6 +509,8 @@ func (r *Renderer) BGColor() Color {
 type CellMetrics struct {
 	CellWidth  float32
 	CellHeight float32
+	PaddingX   float32
+	PaddingY   float32
 }
 
 // Metrics returns the cell dimensions.
@@ -435,6 +518,8 @@ func (r *Renderer) Metrics() CellMetrics {
 	return CellMetrics{
 		CellWidth:  r.cellW,
 		CellHeight: r.cellH,
+		PaddingX:   r.paddingX,
+		PaddingY:   r.paddingY,
 	}
 }
 
@@ -442,12 +527,15 @@ func (r *Renderer) Metrics() CellMetrics {
 func (r *Renderer) Destroy() {
 	gl.DeleteBuffers(1, &r.bgVBO)
 	gl.DeleteBuffers(1, &r.textVBO)
+	gl.DeleteBuffers(1, &r.decorationVBO)
 	gl.DeleteBuffers(1, &r.cursorVBO)
 	gl.DeleteVertexArrays(1, &r.bgVAO)
 	gl.DeleteVertexArrays(1, &r.textVAO)
+	gl.DeleteVertexArrays(1, &r.decorationVAO)
 	gl.DeleteVertexArrays(1, &r.cursorVAO)
 	gl.DeleteProgram(r.bgProg)
 	gl.DeleteProgram(r.textProg)
+	gl.DeleteProgram(r.decorationProg)
 	gl.DeleteProgram(r.cursorProg)
 	gl.DeleteTextures(1, &r.atlasTex)
 }

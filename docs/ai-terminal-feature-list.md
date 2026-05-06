@@ -20,6 +20,13 @@
 - 已让窗口 resize 同步更新 terminal grid、PTY size 和 renderer grid bounds。
 - 已增加上述行为的回归测试。
 
+### 2026-05-06 Phase 0 第二批
+
+- 已让鼠标点击、拖拽选择、滚轮上报统一扣除 renderer padding，避免命中位置与实际文字显示偏移。
+- 已扩展 renderer cell 样式，支持 underline、strikethrough、overline 装饰标记。
+- 已增加独立 decoration shader pass，用细矩形绘制下划线、删除线和上划线。
+- 已增加 padding 坐标映射、renderer metrics 和装饰线构建的回归测试。
+
 ## P0：终端基础能力
 
 这些能力是 AI 功能上线前的地基。地基不稳，Agent 只会放大问题。

@@ -97,6 +97,43 @@ void main() {
 }
 ` + "\x00"
 
+// Decoration vertex shader — draws underline/strike/overline rectangles.
+const decorationVertSrc = `
+#version 410 core
+
+layout(location = 0) in vec4 line_rect;  // col, row, y offset, thickness
+layout(location = 1) in vec4 line_color; // RGBA foreground (instance)
+
+uniform mat4 projection;
+uniform vec2 cell_size;
+uniform vec2 padding;
+
+out vec4 d_color;
+
+void main() {
+    vec2 corner = vec2(
+        float(gl_VertexID == 1 || gl_VertexID == 3),
+        float(gl_VertexID == 2 || gl_VertexID == 3)
+    );
+
+    vec2 cell_pixel = padding + line_rect.xy * cell_size;
+    vec2 pos = cell_pixel + vec2(corner.x * cell_size.x, line_rect.z + corner.y * line_rect.w);
+    gl_Position = projection * vec4(pos, 0.0, 1.0);
+    d_color = line_color;
+}
+` + "\x00"
+
+const decorationFragSrc = `
+#version 410 core
+
+in vec4 d_color;
+out vec4 out_color;
+
+void main() {
+    out_color = d_color;
+}
+` + "\x00"
+
 // Cursor vertex shader.
 const cursorVertSrc = `
 #version 410 core

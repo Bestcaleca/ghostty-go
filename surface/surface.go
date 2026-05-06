@@ -230,8 +230,7 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 		return
 	}
 	metrics := s.renderer.Metrics()
-	col := int(x / float64(metrics.CellWidth))
-	row := int(y / float64(metrics.CellHeight))
+	row, col := gridPositionFromPixels(x, y, metrics)
 
 	if s.contextMenu.visible && action == glfw.Press {
 		s.handleContextMenuClick(row, col)
@@ -319,8 +318,7 @@ func (s *Surface) HandleMouseMotion(x, y float64) {
 
 	if s.selecting {
 		metrics := s.renderer.Metrics()
-		col := int(x / float64(metrics.CellWidth))
-		row := int(y / float64(metrics.CellHeight))
+		row, col := gridPositionFromPixels(x, y, metrics)
 		s.terminal.SelectionUpdate(row, col)
 	}
 }
@@ -350,8 +348,7 @@ func (s *Surface) HandleScroll(xoff, yoff float64, x, y float64, mods glfw.Modif
 	s.mouseH.SetMode(s.terminal.MouseMode())
 
 	metrics := s.renderer.Metrics()
-	col := int(x / float64(metrics.CellWidth))
-	row := int(y / float64(metrics.CellHeight))
+	row, col := gridPositionFromPixels(x, y, metrics)
 
 	seq := s.mouseH.EncodeScroll(xoff, yoff, input.Modifiers{}, col, row)
 	if seq != nil {
@@ -395,6 +392,21 @@ func gridSizeFromPixels(width, height int, metrics renderer.CellMetrics) (rows, 
 		rows = 1
 	}
 	return rows, cols
+}
+
+func gridPositionFromPixels(x, y float64, metrics renderer.CellMetrics) (row, col int) {
+	if metrics.CellWidth <= 0 || metrics.CellHeight <= 0 {
+		return 0, 0
+	}
+	col = int((x - float64(metrics.PaddingX)) / float64(metrics.CellWidth))
+	row = int((y - float64(metrics.PaddingY)) / float64(metrics.CellHeight))
+	if col < 0 {
+		col = 0
+	}
+	if row < 0 {
+		row = 0
+	}
+	return row, col
 }
 
 // ProcessMessages drains the message channel and fires callbacks.
@@ -591,6 +603,15 @@ func applyTextStyle(cell renderer.Cell, style terminal.Style) renderer.Cell {
 	}
 	if style.Faint {
 		cell.FG = scaleColor(cell.FG, 0.6)
+	}
+	if style.Underline != terminal.UnderlineNone {
+		cell.Underline = true
+	}
+	if style.Strikethrough {
+		cell.Strikethrough = true
+	}
+	if style.Overline {
+		cell.Overline = true
 	}
 	if style.Invisible {
 		cell.Char = ' '

@@ -90,6 +90,21 @@ func TestApplyTextStyleBoldAndFaint(t *testing.T) {
 	}
 }
 
+func TestApplyTextStyleSetsDecorationFlags(t *testing.T) {
+	cell := renderer.Cell{Char: 'X'}
+	style := terminal.Style{
+		Underline:     terminal.UnderlineSingle,
+		Strikethrough: true,
+		Overline:      true,
+	}
+
+	got := applyTextStyle(cell, style)
+
+	if !got.Underline || !got.Strikethrough || !got.Overline {
+		t.Fatalf("decorations = underline:%t strike:%t overline:%t", got.Underline, got.Strikethrough, got.Overline)
+	}
+}
+
 func TestGridSizeFromPixels(t *testing.T) {
 	metrics := renderer.CellMetrics{CellWidth: 10, CellHeight: 20}
 
@@ -107,5 +122,35 @@ func TestGridSizeFromPixelsHasMinimumOneCell(t *testing.T) {
 
 	if rows != 1 || cols != 1 {
 		t.Fatalf("grid size = %dx%d, want minimum 1x1", rows, cols)
+	}
+}
+
+func TestGridPositionFromPixelsSubtractsPadding(t *testing.T) {
+	metrics := renderer.CellMetrics{
+		CellWidth:  10,
+		CellHeight: 15,
+		PaddingX:   5,
+		PaddingY:   7,
+	}
+
+	row, col := gridPositionFromPixels(24, 36, metrics)
+
+	if row != 1 || col != 1 {
+		t.Fatalf("grid position = %d,%d, want 1,1", row, col)
+	}
+}
+
+func TestGridPositionFromPixelsClampsPaddingAreaToFirstCell(t *testing.T) {
+	metrics := renderer.CellMetrics{
+		CellWidth:  10,
+		CellHeight: 15,
+		PaddingX:   5,
+		PaddingY:   7,
+	}
+
+	row, col := gridPositionFromPixels(2, 3, metrics)
+
+	if row != 0 || col != 0 {
+		t.Fatalf("grid position = %d,%d, want 0,0", row, col)
 	}
 }
