@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ghostty-go/ghostty-go/input"
 	"github.com/ghostty-go/ghostty-go/parser"
 )
 
@@ -247,6 +248,58 @@ func TestTerminalDeviceReportsRespond(t *testing.T) {
 		if string(responses[i]) != want[i] {
 			t.Fatalf("response %d = %q, want %q", i, responses[i], want[i])
 		}
+	}
+}
+
+func TestTerminalSGRMouseMode(t *testing.T) {
+	term := newTestTerminal(24, 80)
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{1000, 1006},
+		ParamCount: 2,
+	})
+
+	if got := term.MouseMode(); got != input.MouseModeNormal {
+		t.Fatalf("MouseMode() = %v, want normal", got)
+	}
+	if !term.MouseSGR() {
+		t.Fatal("MouseSGR() = false, want true")
+	}
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'l',
+		Private:    true,
+		Params:     [24]uint16{1006},
+		ParamCount: 1,
+	})
+	if term.MouseSGR() {
+		t.Fatal("MouseSGR() stayed true after reset")
+	}
+}
+
+func TestTerminalFocusEventsMode(t *testing.T) {
+	term := newTestTerminal(24, 80)
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{1004},
+		ParamCount: 1,
+	})
+	if !term.FocusEvents() {
+		t.Fatal("FocusEvents() = false, want true")
+	}
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'l',
+		Private:    true,
+		Params:     [24]uint16{1004},
+		ParamCount: 1,
+	})
+	if term.FocusEvents() {
+		t.Fatal("FocusEvents() stayed true after reset")
 	}
 }
 

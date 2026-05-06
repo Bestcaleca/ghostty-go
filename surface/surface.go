@@ -41,6 +41,7 @@ type Surface struct {
 	lastClickRow  int
 	lastClickCol  int
 	clickCount    int
+	mouseButtons  map[glfw.MouseButton]bool
 
 	// Context menu state
 	contextMenu contextMenu
@@ -99,6 +100,7 @@ func New(cfg Config) (*Surface, error) {
 		lastBlink:     time.Now(),
 		rows:          cfg.Rows,
 		cols:          cfg.Cols,
+		mouseButtons:  make(map[glfw.MouseButton]bool),
 	}
 
 	return s, nil
@@ -231,6 +233,17 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 	}
 	metrics := s.renderer.Metrics()
 	row, col := gridPositionFromPixels(x, y, metrics)
+	mouseMode := s.terminal.MouseMode()
+
+	if terminalMouseBypassesLocalSelection(mouseMode, mods) {
+		s.updateMouseHandler(mouseMode)
+		seq := s.mouseH.EncodeMouseButton(button, action, glfwModsToInput(mods), col, row)
+		s.trackMouseButton(button, action)
+		if seq != nil {
+			s.termio.Write(seq)
+		}
+		return
+	}
 
 	if s.contextMenu.visible && action == glfw.Press {
 		s.handleContextMenuClick(row, col)
@@ -295,31 +308,42 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 	}
 
 	// Update mouse mode from terminal state
-	s.mouseH.SetMode(s.terminal.MouseMode())
+	s.updateMouseHandler(s.terminal.MouseMode())
 
-	m := input.Modifiers{
-		Shift:   mods&glfw.ModShift != 0,
-		Control: mods&glfw.ModControl != 0,
-		Alt:     mods&glfw.ModAlt != 0,
-		Super:   mods&glfw.ModSuper != 0,
-	}
-
-	seq := s.mouseH.EncodeMouseButton(button, action, m, col, row)
+	seq := s.mouseH.EncodeMouseButton(button, action, glfwModsToInput(mods), col, row)
 	if seq != nil {
 		s.termio.Write(seq)
 	}
 }
 
 // HandleMouseMotion processes a GLFW mouse motion event.
-func (s *Surface) HandleMouseMotion(x, y float64) {
+func (s *Surface) HandleMouseMotion(x, y float64, mods glfw.ModifierKey) {
 	if s.renderer == nil {
 		return
 	}
 
+	metrics := s.renderer.Metrics()
+	row, col := gridPositionFromPixels(x, y, metrics)
+	mouseMode := s.terminal.MouseMode()
+	if terminalMouseBypassesLocalSelection(mouseMode, mods) {
+		s.updateMouseHandler(mouseMode)
+		seq := s.mouseH.EncodeMouseMotion(s.pressedMouseButtons(), glfwModsToInput(mods), col, row)
+		if seq != nil {
+			s.termio.Write(seq)
+		}
+		return
+	}
+
 	if s.selecting {
-		metrics := s.renderer.Metrics()
-		row, col := gridPositionFromPixels(x, y, metrics)
 		s.terminal.SelectionUpdate(row, col)
+	}
+}
+
+// HandleFocus processes a window focus change.
+func (s *Surface) HandleFocus(focused bool) {
+	seq := focusEventSequence(s.terminal.FocusEvents(), focused)
+	if seq != nil {
+		s.termio.Write(seq)
 	}
 }
 
@@ -345,7 +369,7 @@ func (s *Surface) HandleScroll(xoff, yoff float64, x, y float64, mods glfw.Modif
 	}
 
 	// Update mouse mode from terminal state
-	s.mouseH.SetMode(s.terminal.MouseMode())
+	s.updateMouseHandler(s.terminal.MouseMode())
 
 	metrics := s.renderer.Metrics()
 	row, col := gridPositionFromPixels(x, y, metrics)
@@ -354,6 +378,39 @@ func (s *Surface) HandleScroll(xoff, yoff float64, x, y float64, mods glfw.Modif
 	if seq != nil {
 		s.termio.Write(seq)
 	}
+}
+
+func (s *Surface) updateMouseHandler(mode input.MouseMode) {
+	s.mouseH.SetMode(mode)
+	s.mouseH.SetSGR(s.terminal.MouseSGR())
+}
+
+func (s *Surface) trackMouseButton(button glfw.MouseButton, action glfw.Action) {
+	if s.mouseButtons == nil {
+		s.mouseButtons = make(map[glfw.MouseButton]bool)
+	}
+	switch action {
+	case glfw.Press:
+		s.mouseButtons[button] = true
+	case glfw.Release:
+		delete(s.mouseButtons, button)
+	}
+}
+
+func (s *Surface) pressedMouseButtons() []glfw.MouseButton {
+	buttons := make([]glfw.MouseButton, 0, len(s.mouseButtons))
+	for _, button := range []glfw.MouseButton{
+		glfw.MouseButtonLeft,
+		glfw.MouseButtonMiddle,
+		glfw.MouseButtonRight,
+		glfw.MouseButton4,
+		glfw.MouseButton5,
+	} {
+		if s.mouseButtons[button] {
+			buttons = append(buttons, button)
+		}
+	}
+	return buttons
 }
 
 // HandleResize processes a window resize event.
@@ -407,6 +464,29 @@ func gridPositionFromPixels(x, y float64, metrics renderer.CellMetrics) (row, co
 		row = 0
 	}
 	return row, col
+}
+
+func terminalMouseBypassesLocalSelection(mode input.MouseMode, mods glfw.ModifierKey) bool {
+	return mode != input.MouseModeNone && mods&glfw.ModShift == 0
+}
+
+func focusEventSequence(enabled, focused bool) []byte {
+	if !enabled {
+		return nil
+	}
+	if focused {
+		return []byte("\x1b[I")
+	}
+	return []byte("\x1b[O")
+}
+
+func glfwModsToInput(mods glfw.ModifierKey) input.Modifiers {
+	return input.Modifiers{
+		Shift:   mods&glfw.ModShift != 0,
+		Control: mods&glfw.ModControl != 0,
+		Alt:     mods&glfw.ModAlt != 0,
+		Super:   mods&glfw.ModSuper != 0,
+	}
 }
 
 // ProcessMessages drains the message channel and fires callbacks.

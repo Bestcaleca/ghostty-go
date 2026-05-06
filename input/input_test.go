@@ -146,7 +146,8 @@ func TestMouseHandlerNone(t *testing.T) {
 
 func TestMouseHandlerSGR(t *testing.T) {
 	mh := NewMouseHandler()
-	mh.SetMode(MouseModeSGR)
+	mh.SetMode(MouseModeNormal)
+	mh.SetSGR(true)
 
 	seq := mh.EncodeMouseButton(glfw.MouseButtonLeft, glfw.Press, Modifiers{}, 5, 10)
 	want := "\x1b[<0;6;11M"
@@ -161,9 +162,39 @@ func TestMouseHandlerSGR(t *testing.T) {
 	}
 }
 
+func TestMouseHandlerButtonModeOnlyReportsMotionWithButton(t *testing.T) {
+	mh := NewMouseHandler()
+	mh.SetMode(MouseModeButton)
+	mh.SetSGR(true)
+
+	seq := mh.EncodeMouseMotion(nil, Modifiers{}, 5, 10)
+	if seq != nil {
+		t.Fatalf("button mouse mode should ignore passive motion, got %q", seq)
+	}
+
+	seq = mh.EncodeMouseMotion([]glfw.MouseButton{glfw.MouseButtonLeft}, Modifiers{}, 5, 10)
+	want := "\x1b[<32;6;11M"
+	if string(seq) != want {
+		t.Fatalf("button drag = %q, want %q", string(seq), want)
+	}
+}
+
+func TestMouseHandlerAnyModeReportsPassiveMotion(t *testing.T) {
+	mh := NewMouseHandler()
+	mh.SetMode(MouseModeAny)
+	mh.SetSGR(true)
+
+	seq := mh.EncodeMouseMotion(nil, Modifiers{}, 5, 10)
+	want := "\x1b[<35;6;11M"
+	if string(seq) != want {
+		t.Fatalf("any passive motion = %q, want %q", string(seq), want)
+	}
+}
+
 func TestMouseHandlerScroll(t *testing.T) {
 	mh := NewMouseHandler()
-	mh.SetMode(MouseModeSGR)
+	mh.SetMode(MouseModeNormal)
+	mh.SetSGR(true)
 
 	seq := mh.EncodeScroll(0, 1, Modifiers{}, 5, 10)
 	want := "\x1b[<64;6;11M"

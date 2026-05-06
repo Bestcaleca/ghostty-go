@@ -230,7 +230,24 @@ func run() error {
 	})
 
 	window.SetCursorPosCallback(func(w *glfw.Window, x, y float64) {
-		s.HandleMouseMotion(x, y)
+		var mods glfw.ModifierKey
+		if w.GetKey(glfw.KeyLeftShift) == glfw.Press || w.GetKey(glfw.KeyRightShift) == glfw.Press {
+			mods |= glfw.ModShift
+		}
+		if w.GetKey(glfw.KeyLeftControl) == glfw.Press || w.GetKey(glfw.KeyRightControl) == glfw.Press {
+			mods |= glfw.ModControl
+		}
+		if w.GetKey(glfw.KeyLeftAlt) == glfw.Press || w.GetKey(glfw.KeyRightAlt) == glfw.Press {
+			mods |= glfw.ModAlt
+		}
+		if w.GetKey(glfw.KeyLeftSuper) == glfw.Press || w.GetKey(glfw.KeyRightSuper) == glfw.Press {
+			mods |= glfw.ModSuper
+		}
+		s.HandleMouseMotion(x, y, mods)
+	})
+
+	window.SetFocusCallback(func(w *glfw.Window, focused bool) {
+		s.HandleFocus(focused)
 	})
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff, yoff float64) {

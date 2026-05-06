@@ -8,29 +8,30 @@ type ModeState struct {
 	LNM         bool // Line feed / newline mode
 
 	// DEC private modes (DECSET/DECRST)
-	DecCKM      bool // Application cursor keys
-	DecANM      bool // ANSI/VT52 mode
-	DecCOLM132  bool // 132 column mode
-	DecSCNM     bool // Screen reverse video
-	DecOM       bool // Origin mode (DECOM)
-	DecAWM      bool // Auto-wrap mode (DECAWM)
-	DecARM      bool // Auto-repeat mode
-	DecINLM     bool // Interlace mode
+	DecCKM     bool // Application cursor keys
+	DecANM     bool // ANSI/VT52 mode
+	DecCOLM132 bool // 132 column mode
+	DecSCNM    bool // Screen reverse video
+	DecOM      bool // Origin mode (DECOM)
+	DecAWM     bool // Auto-wrap mode (DECAWM)
+	DecARM     bool // Auto-repeat mode
+	DecINLM    bool // Interlace mode
 
 	// More DEC private modes
-	DecTextCursorEnable  bool // DECTCEM - cursor visible
-	DecTextCursorBlink   bool // cursor blink (xterm)
-	DecAltScreen         bool // alternate screen buffer (xterm 1047)
-	DecAltScreenSave     bool // alternate screen + save cursor (xterm 1049)
-	DecMouseX10          bool // X10 mouse tracking
-	DecMouseNormal       bool // Normal mouse tracking
-	DecMouseHighlight    bool // Highlight mouse tracking
-	DecMouseButton       bool // Button-event mouse tracking
-	DecMouseAny          bool // Any-event mouse tracking
-	DecBracketedPaste    bool // Bracketed paste mode (xterm 2004)
-	DecFocusEvents       bool // Focus in/out events (xterm 1004)
-	DecAltScroll         bool // Alternate scroll mode (xterm 1007)
-	DecSixelScroll       bool // Sixel scrolling mode
+	DecTextCursorEnable bool // DECTCEM - cursor visible
+	DecTextCursorBlink  bool // cursor blink (xterm)
+	DecAltScreen        bool // alternate screen buffer (xterm 1047)
+	DecAltScreenSave    bool // alternate screen + save cursor (xterm 1049)
+	DecMouseX10         bool // X10 mouse tracking
+	DecMouseNormal      bool // Normal mouse tracking
+	DecMouseHighlight   bool // Highlight mouse tracking
+	DecMouseButton      bool // Button-event mouse tracking
+	DecMouseAny         bool // Any-event mouse tracking
+	DecMouseSGR         bool // SGR extended mouse coordinates
+	DecBracketedPaste   bool // Bracketed paste mode (xterm 2004)
+	DecFocusEvents      bool // Focus in/out events (xterm 1004)
+	DecAltScroll        bool // Alternate scroll mode (xterm 1007)
+	DecSixelScroll      bool // Sixel scrolling mode
 
 	// xterm extensions
 	GraphemeCluster bool // Mode 2027 - grapheme cluster mode
@@ -48,28 +49,29 @@ type Mode int
 const (
 	ModeInsert      Mode = 4  // IRM
 	ModeSendReceive Mode = 12 // SRM
-	ModeLNM        Mode = 20 // LNM
+	ModeLNM         Mode = 20 // LNM
 )
 
 // DEC private modes (CSI ? Ps h / CSI ? Ps l)
 const (
-	ModeDecCKM              Mode = 1   // Application cursor keys
-	ModeDecANM              Mode = 2   // ANSI/VT52 mode
-	ModeDecCOLM132          Mode = 3   // 132 column mode
-	ModeDecSCNM             Mode = 5   // Screen reverse video
-	ModeDecOM               Mode = 6   // Origin mode
-	ModeDecAWM              Mode = 7   // Auto-wrap mode
-	ModeDecARM              Mode = 8   // Auto-repeat mode
-	ModeDecINLM             Mode = 9   // Interlace mode
-	ModeDecTextCursorBlink  Mode = 12  // Cursor blink
-	ModeDecMouseX10         Mode = 9   // X10 mouse tracking
-	ModeDecAltScreenSave    Mode = 47  // Alternate screen buffer
-	ModeDecTextCursorEnable Mode = 25  // Cursor visible
+	ModeDecCKM              Mode = 1    // Application cursor keys
+	ModeDecANM              Mode = 2    // ANSI/VT52 mode
+	ModeDecCOLM132          Mode = 3    // 132 column mode
+	ModeDecSCNM             Mode = 5    // Screen reverse video
+	ModeDecOM               Mode = 6    // Origin mode
+	ModeDecAWM              Mode = 7    // Auto-wrap mode
+	ModeDecARM              Mode = 8    // Auto-repeat mode
+	ModeDecINLM             Mode = 9    // Interlace mode
+	ModeDecTextCursorBlink  Mode = 12   // Cursor blink
+	ModeDecMouseX10         Mode = 9    // X10 mouse tracking
+	ModeDecAltScreenSave    Mode = 47   // Alternate screen buffer
+	ModeDecTextCursorEnable Mode = 25   // Cursor visible
 	ModeDecMouseNormal      Mode = 1000 // Normal mouse tracking
 	ModeDecMouseHighlight   Mode = 1001 // Highlight mouse tracking
 	ModeDecMouseButton      Mode = 1002 // Button-event mouse tracking
 	ModeDecMouseAny         Mode = 1003 // Any-event mouse tracking
 	ModeDecFocusEvents      Mode = 1004 // Focus events
+	ModeDecMouseSGR         Mode = 1006 // SGR extended mouse coordinates
 	ModeDecAltScreen        Mode = 1047 // Alternate screen (xterm)
 	ModeDecAltScreenSaveCur Mode = 1049 // Alternate screen + save cursor
 	ModeDecBracketedPaste   Mode = 2004 // Bracketed paste
@@ -140,6 +142,8 @@ func (m *ModeState) SetDecMode(mode Mode) {
 		m.DecMouseButton = true
 	case ModeDecMouseAny:
 		m.DecMouseAny = true
+	case ModeDecMouseSGR:
+		m.DecMouseSGR = true
 	case ModeDecBracketedPaste:
 		m.DecBracketedPaste = true
 	case ModeDecFocusEvents:
@@ -192,6 +196,8 @@ func (m *ModeState) ResetDecMode(mode Mode) {
 		m.DecMouseButton = false
 	case ModeDecMouseAny:
 		m.DecMouseAny = false
+	case ModeDecMouseSGR:
+		m.DecMouseSGR = false
 	case ModeDecBracketedPaste:
 		m.DecBracketedPaste = false
 	case ModeDecFocusEvents:
@@ -240,6 +246,8 @@ func (m *ModeState) QueryDecMode(mode Mode) bool {
 		return m.DecMouseButton
 	case ModeDecMouseAny:
 		return m.DecMouseAny
+	case ModeDecMouseSGR:
+		return m.DecMouseSGR
 	case ModeDecBracketedPaste:
 		return m.DecBracketedPaste
 	case ModeDecFocusEvents:

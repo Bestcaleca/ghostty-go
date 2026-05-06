@@ -3,6 +3,9 @@ package surface
 import (
 	"testing"
 
+	"github.com/go-gl/glfw/v3.3/glfw"
+
+	"github.com/ghostty-go/ghostty-go/input"
 	"github.com/ghostty-go/ghostty-go/renderer"
 	"github.com/ghostty-go/ghostty-go/terminal"
 )
@@ -152,5 +155,29 @@ func TestGridPositionFromPixelsClampsPaddingAreaToFirstCell(t *testing.T) {
 
 	if row != 0 || col != 0 {
 		t.Fatalf("grid position = %d,%d, want 0,0", row, col)
+	}
+}
+
+func TestTerminalMouseBypassesLocalSelectionUnlessShift(t *testing.T) {
+	if !terminalMouseBypassesLocalSelection(input.MouseModeNormal, 0) {
+		t.Fatal("terminal mouse mode should bypass local selection")
+	}
+	if terminalMouseBypassesLocalSelection(input.MouseModeNormal, glfw.ModShift) {
+		t.Fatal("shift should force local selection behavior")
+	}
+	if terminalMouseBypassesLocalSelection(input.MouseModeNone, 0) {
+		t.Fatal("mouse mode none should keep local selection behavior")
+	}
+}
+
+func TestFocusEventSequence(t *testing.T) {
+	if got := focusEventSequence(false, true); got != nil {
+		t.Fatalf("disabled focus sequence = %q, want nil", got)
+	}
+	if got := string(focusEventSequence(true, true)); got != "\x1b[I" {
+		t.Fatalf("focus in sequence = %q", got)
+	}
+	if got := string(focusEventSequence(true, false)); got != "\x1b[O" {
+		t.Fatalf("focus out sequence = %q", got)
 	}
 }

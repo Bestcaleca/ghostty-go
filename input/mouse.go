@@ -10,17 +10,18 @@ import (
 type MouseMode int
 
 const (
-	MouseModeNone    MouseMode = iota // No reporting
-	MouseModeX10                      // X10 (button press only)
-	MouseModeNormal                   // Normal (press + release)
-	MouseModeButton                   // Button (press + release + drag)
-	MouseModeAny                      // Any (press + release + drag + motion)
-	MouseModeSGR                      // SGR extended (like Any but with SGR encoding)
+	MouseModeNone   MouseMode = iota // No reporting
+	MouseModeX10                     // X10 (button press only)
+	MouseModeNormal                  // Normal (press + release)
+	MouseModeButton                  // Button (press + release + drag)
+	MouseModeAny                     // Any (press + release + drag + motion)
+	MouseModeSGR                     // SGR extended (like Any but with SGR encoding)
 )
 
 // MouseHandler converts GLFW mouse events into terminal escape sequences.
 type MouseHandler struct {
 	mode MouseMode
+	sgr  bool
 }
 
 // NewMouseHandler creates a new mouse handler.
@@ -30,7 +31,16 @@ func NewMouseHandler() *MouseHandler {
 
 // SetMode sets the mouse reporting mode.
 func (mh *MouseHandler) SetMode(mode MouseMode) {
+	if mode == MouseModeSGR {
+		mh.sgr = true
+		mode = MouseModeAny
+	}
 	mh.mode = mode
+}
+
+// SetSGR controls whether mouse positions use xterm SGR extended encoding.
+func (mh *MouseHandler) SetSGR(enabled bool) {
+	mh.sgr = enabled
 }
 
 // EncodeMouseButton encodes a mouse button press/release event.
@@ -66,11 +76,14 @@ func (mh *MouseHandler) EncodeMouseButton(button glfw.MouseButton, action glfw.A
 
 // EncodeMouseMotion encodes a mouse motion event.
 func (mh *MouseHandler) EncodeMouseMotion(buttons []glfw.MouseButton, mods Modifiers, col, row int) []byte {
-	if mh.mode != MouseModeAny && mh.mode != MouseModeSGR && mh.mode != MouseModeButton {
+	if mh.mode != MouseModeAny && mh.mode != MouseModeButton {
+		return nil
+	}
+	if mh.mode == MouseModeButton && len(buttons) == 0 {
 		return nil
 	}
 
-	cb := 32 // Motion indicator
+	cb := 35 // Passive motion indicator
 	if len(buttons) > 0 {
 		cb = encodeButton(buttons[0], glfw.Press)
 		if cb < 0 {
@@ -93,11 +106,11 @@ func (mh *MouseHandler) EncodeMouseMotion(buttons []glfw.MouseButton, mods Modif
 }
 
 func (mh *MouseHandler) encodePosition(cb, col, row int) []byte {
-	if mh.mode == MouseModeSGR {
+	if mh.sgr {
 		// SGR extended: CSI < Cb ; Cx ; Cy M (press)  or  CSI < Cb ; Cx ; Cy m (release)
 		// Bit 5 of cb indicates release in SGR mode (cb & 3 == 3 for release)
 		terminator := "M"
-		if cb&3 == 3 && cb < 64 {
+		if cb&3 == 3 && cb < 32 {
 			terminator = "m"
 		}
 		return []byte(fmt.Sprintf("\x1b[<%d;%d;%d%s", cb, col+1, row+1, terminator))

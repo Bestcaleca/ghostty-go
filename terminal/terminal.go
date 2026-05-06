@@ -131,6 +131,20 @@ func (t *Terminal) MouseMode() input.MouseMode {
 	return input.MouseModeNone
 }
 
+// MouseSGR returns whether xterm SGR extended mouse encoding is enabled.
+func (t *Terminal) MouseSGR() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.active.Modes.DecMouseSGR
+}
+
+// FocusEvents returns whether focus in/out reporting is enabled.
+func (t *Terminal) FocusEvents() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.active.Modes.DecFocusEvents
+}
+
 // SelectionStart begins a text selection.
 func (t *Terminal) SelectionStart(row, col int, mode SelectionMode) {
 	t.mu.Lock()

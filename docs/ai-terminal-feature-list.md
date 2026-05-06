@@ -34,6 +34,14 @@
 - 已让主字体继续负责 terminal cell metrics，避免 fallback 字体改变网格宽高。
 - 已增加字体 fallback 选择、renderer 动态 glyph 栅格化和 fallback 候选列表测试。
 
+### 2026-05-06 Phase 0 第四批
+
+- 已支持 xterm SGR mouse mode (`DECSET ?1006`) 独立于鼠标追踪模式启用。
+- 已修复 button-event mouse mode 误上报无按钮移动的问题，any-event mode 继续上报被动移动。
+- 已让 TUI 启用鼠标追踪时优先接收点击、右键和拖拽事件；按 Shift 时保留本地选择行为。
+- 已接入 focus in/out 事件 (`DECSET ?1004`)，窗口焦点变化时可发送 `CSI I` / `CSI O`。
+- 已增加 SGR mouse、motion、focus mode 和 surface 路由 helper 的回归测试。
+
 ## P0：终端基础能力
 
 这些能力是 AI 功能上线前的地基。地基不稳，Agent 只会放大问题。
