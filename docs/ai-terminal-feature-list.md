@@ -71,6 +71,13 @@
 - 已保留 `DECRST ?7` 关闭自动换行的能力，应用仍可显式控制 wrap mode。
 - 已增加默认自动换行、宽字符右边界换行的回归测试。
 
+### 2026-05-06 Phase 0 第九批
+
+- 已支持 DECTCEM `DECSET ?25` / `DECRST ?25` 真正显示和隐藏文本光标。
+- 已把终端层 `Cursor.Visible` 接入 surface 渲染判断，TUI 隐藏光标时 renderer 不再继续绘制光标。
+- 已让新屏幕默认 cursor visible mode 与实际 cursor 可见状态一致。
+- 已增加终端光标显示隐藏、surface 渲染可见性组合的回归测试。
+
 ## P0：终端基础能力
 
 这些能力是 AI 功能上线前的地基。地基不稳，Agent 只会放大问题。

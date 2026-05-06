@@ -523,6 +523,10 @@ func (s *Surface) UpdateCursor() bool {
 	return s.cursorVisible
 }
 
+func cursorVisibleForRender(terminalVisible, blinkVisible bool, scrollOffset int) bool {
+	return terminalVisible && blinkVisible && scrollOffset == 0
+}
+
 // RenderGrid converts the terminal grid to renderer cells and draws a frame.
 func (s *Surface) RenderGrid() {
 	if s.renderer == nil {
@@ -533,7 +537,7 @@ func (s *Surface) RenderGrid() {
 	defer s.mu.RUnlock()
 
 	grid := s.terminal.Grid()
-	cursorRow, cursorCol, _, cursorStyle := s.terminal.Cursor()
+	cursorRow, cursorCol, terminalCursorVisible, cursorStyle := s.terminal.Cursor()
 
 	// Update application cursor mode
 	s.keyH.SetApplicationCursorKeys(s.terminal.Active().Modes.QueryDecMode(terminal.ModeDecCKM))
@@ -595,11 +599,7 @@ func (s *Surface) RenderGrid() {
 
 	applyContextMenuOverlay(renderGrid, s.contextMenu)
 
-	// Hide cursor when scrolled back
-	cursorVisible := s.UpdateCursor()
-	if s.scrollOffset > 0 {
-		cursorVisible = false
-	}
+	cursorVisible := cursorVisibleForRender(terminalCursorVisible, s.UpdateCursor(), s.scrollOffset)
 
 	// Convert terminal cursor style to renderer style
 	renCursorStyle := convertCursorStyle(cursorStyle)

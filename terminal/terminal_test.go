@@ -443,6 +443,37 @@ func TestTerminalCSIIntermediate(t *testing.T) {
 	}
 }
 
+func TestTerminalDecTextCursorVisibility(t *testing.T) {
+	term := newTestTerminal(24, 80)
+
+	_, _, visible, _ := term.Cursor()
+	if !visible {
+		t.Fatal("cursor should be visible by default")
+	}
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'l',
+		Private:    true,
+		Params:     [24]uint16{25},
+		ParamCount: 1,
+	})
+	_, _, visible, _ = term.Cursor()
+	if visible {
+		t.Fatal("cursor stayed visible after DECRST ?25")
+	}
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{25},
+		ParamCount: 1,
+	})
+	_, _, visible, _ = term.Cursor()
+	if !visible {
+		t.Fatal("cursor stayed hidden after DECSET ?25")
+	}
+}
+
 func TestTerminalInsertMode(t *testing.T) {
 	term := newTestTerminal(24, 80)
 	term.Print('A')

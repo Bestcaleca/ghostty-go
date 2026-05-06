@@ -181,3 +181,18 @@ func TestFocusEventSequence(t *testing.T) {
 		t.Fatalf("focus out sequence = %q", got)
 	}
 }
+
+func TestCursorVisibleForRenderRequiresTerminalVisibility(t *testing.T) {
+	if cursorVisibleForRender(false, true, 0) {
+		t.Fatal("hidden terminal cursor should not render")
+	}
+	if cursorVisibleForRender(true, false, 0) {
+		t.Fatal("blink-hidden cursor should not render")
+	}
+	if cursorVisibleForRender(true, true, 1) {
+		t.Fatal("cursor should not render while scrolled back")
+	}
+	if !cursorVisibleForRender(true, true, 0) {
+		t.Fatal("visible terminal cursor should render when blink is visible and not scrolled back")
+	}
+}
