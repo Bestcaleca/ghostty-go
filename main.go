@@ -103,16 +103,16 @@ func run() error {
 		return fmt.Errorf("gl init: %w", err)
 	}
 
-	// Load font
-	face, err := loadFont(cfg.FontFamily, fontSize)
+	// Load font stack
+	fontSet, err := loadFontSet(cfg.FontFamily, fontSize)
 	if err != nil {
 		log.Printf("font load failed, using default: %v", err)
-		face = font.DefaultFace()
+		fontSet = font.NewFaceSet(font.DefaultFace())
 	}
 
-	metrics := face.Metrics()
-	log.Printf("Font metrics: cell=%.1fx%.1f ascent=%.1f descent=%.1f",
-		metrics.CellWidth, metrics.CellHeight, metrics.Ascent, metrics.Descent)
+	metrics := fontSet.Metrics()
+	log.Printf("Font metrics: cell=%.1fx%.1f ascent=%.1f descent=%.1f faces=%d",
+		metrics.CellWidth, metrics.CellHeight, metrics.Ascent, metrics.Descent, fontSet.Len())
 
 	// Calculate grid dimensions
 	paddingX := float32(cfg.PaddingX)
@@ -137,18 +137,19 @@ func run() error {
 
 	// Create renderer
 	ren := renderer.New(renderer.Config{
-		Width:       cfg.WindowWidth,
-		Height:      cfg.WindowHeight,
-		CellWidth:   metrics.CellWidth,
-		CellHeight:  metrics.CellHeight,
-		CellAscent:  metrics.Ascent,
-		GridCols:    cols,
-		GridRows:    rows,
-		PaddingX:    paddingX,
-		PaddingY:    paddingY,
-		BGColor:     bgColor,
-		CursorColor: cursorColor,
-		CursorStyle: cursorStyle,
+		Width:           cfg.WindowWidth,
+		Height:          cfg.WindowHeight,
+		CellWidth:       metrics.CellWidth,
+		CellHeight:      metrics.CellHeight,
+		CellAscent:      metrics.Ascent,
+		GridCols:        cols,
+		GridRows:        rows,
+		PaddingX:        paddingX,
+		PaddingY:        paddingY,
+		BGColor:         bgColor,
+		CursorColor:     cursorColor,
+		CursorStyle:     cursorStyle,
+		GlyphRasterizer: fontSet,
 	})
 	defer ren.Destroy()
 
@@ -156,7 +157,7 @@ func run() error {
 
 	// Pre-populate atlas with ASCII printable characters
 	for ch := rune(32); ch < 127; ch++ {
-		ren.EnsureAtlasGlyph(face, ch)
+		ren.EnsureAtlasGlyph(ch)
 	}
 
 	// Create surface (connects terminal + renderer + input + termio)
@@ -278,7 +279,7 @@ func loadFont(family string, size float64) (*font.Face, error) {
 		paths := findFontByName(family)
 		for _, path := range paths {
 			if _, err := os.Stat(path); err == nil {
-				return font.LoadFace(path, size)
+				return loadFontFile(path, size)
 			}
 		}
 	}
@@ -299,11 +300,56 @@ func loadFont(family string, size float64) (*font.Face, error) {
 
 	for _, path := range candidates {
 		if _, err := os.Stat(path); err == nil {
-			return font.LoadFace(path, size)
+			face, err := loadFontFile(path, size)
+			if err == nil {
+				return face, nil
+			}
 		}
 	}
 
 	return nil, fmt.Errorf("no monospace font found in: %s", strings.Join(candidates, ", "))
+}
+
+func loadFontSet(family string, size float64) (*font.FaceSet, error) {
+	primary, err := loadFont(family, size)
+	if err != nil {
+		return nil, err
+	}
+
+	fallbacks := make([]*font.Face, 0)
+	for _, path := range fallbackFontCandidates() {
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		face, err := loadFontFile(path, size)
+		if err != nil {
+			continue
+		}
+		fallbacks = append(fallbacks, face)
+	}
+
+	return font.NewFaceSet(primary, fallbacks...), nil
+}
+
+func fallbackFontCandidates() []string {
+	return []string{
+		"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+		"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+		"/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf",
+		"/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+		"/System/Library/Fonts/Apple Symbols.ttf",
+		"/System/Library/Fonts/Apple Color Emoji.ttc",
+	}
+}
+
+func loadFontFile(path string, size float64) (face *font.Face, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			face = nil
+			err = fmt.Errorf("load font %q panicked: %v", path, r)
+		}
+	}()
+	return font.LoadFace(path, size)
 }
 
 // findFontByName returns possible paths for a font by name.

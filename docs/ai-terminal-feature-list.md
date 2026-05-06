@@ -27,6 +27,13 @@
 - 已增加独立 decoration shader pass，用细矩形绘制下划线、删除线和上划线。
 - 已增加 padding 坐标映射、renderer metrics 和装饰线构建的回归测试。
 
+### 2026-05-06 Phase 0 第三批
+
+- 已增加字体 fallback stack，主字体缺字时可切换到 CJK/符号 fallback 字体。
+- 已让 renderer 在遇到 atlas 缺字时按需栅格化，不再只依赖启动时预加载 ASCII。
+- 已让主字体继续负责 terminal cell metrics，避免 fallback 字体改变网格宽高。
+- 已增加字体 fallback 选择、renderer 动态 glyph 栅格化和 fallback 候选列表测试。
+
 ## P0：终端基础能力
 
 这些能力是 AI 功能上线前的地基。地基不稳，Agent 只会放大问题。

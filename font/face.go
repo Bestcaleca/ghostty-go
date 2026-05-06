@@ -5,9 +5,9 @@ import (
 	"image"
 	"os"
 
-	"github.com/golang/freetype/truetype"
-	"golang.org/x/image/font"
+	xfont "golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -20,16 +20,15 @@ type Metrics struct {
 	LineGap    float32
 }
 
-// Face wraps a TrueType font with precomputed metrics.
+// Face wraps an OpenType font with precomputed metrics.
 type Face struct {
-	ttf      *truetype.Font
 	size     float64
 	dpi      float64
 	metrics  Metrics
-	fontFace font.Face
+	fontFace xfont.Face
 }
 
-// LoadFace loads a TrueType font from a file path at the given size.
+// LoadFace loads an OpenType font or font collection from a file path at the given size.
 func LoadFace(path string, size float64) (*Face, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -38,27 +37,33 @@ func LoadFace(path string, size float64) (*Face, error) {
 	return LoadFaceFromBytes(data, size)
 }
 
-// LoadFaceFromBytes loads a TrueType font from raw bytes.
+// LoadFaceFromBytes loads an OpenType font or font collection from raw bytes.
 func LoadFaceFromBytes(data []byte, size float64) (*Face, error) {
-	ttf, err := truetype.Parse(data)
+	collection, err := opentype.ParseCollection(data)
 	if err != nil {
-		return nil, fmt.Errorf("parse truetype: %w", err)
+		return nil, fmt.Errorf("parse opentype collection: %w", err)
 	}
-	return newFace(ttf, size, 72)
+	sfntFont, err := collection.Font(0)
+	if err != nil {
+		return nil, fmt.Errorf("select collection font: %w", err)
+	}
+	return newFace(sfntFont, size, 72)
 }
 
-func newFace(ttf *truetype.Font, size, dpi float64) (*Face, error) {
-	face := truetype.NewFace(ttf, &truetype.Options{
+func newFace(sfntFont *opentype.Font, size, dpi float64) (*Face, error) {
+	face, err := opentype.NewFace(sfntFont, &opentype.FaceOptions{
 		Size:    size,
 		DPI:     dpi,
-		Hinting: font.HintingFull,
+		Hinting: xfont.HintingFull,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("create opentype face: %w", err)
+	}
 
 	metrics := face.Metrics()
 	cellW := measureCellWidth(face)
 
 	return &Face{
-		ttf:      ttf,
 		size:     size,
 		dpi:      dpi,
 		fontFace: face,
@@ -92,8 +97,14 @@ func (f *Face) Metrics() Metrics {
 }
 
 // FontFace returns the underlying x/image/font.Face.
-func (f *Face) FontFace() font.Face {
+func (f *Face) FontFace() xfont.Face {
 	return f.fontFace
+}
+
+// HasGlyph reports whether this face contains a real glyph for r.
+func (f *Face) HasGlyph(r rune) bool {
+	_, _, ok := f.fontFace.GlyphBounds(r)
+	return ok
 }
 
 // RasterizeGlyph renders a single glyph and returns its bitmap.
@@ -111,7 +122,7 @@ func (f *Face) RasterizeGlyph(r rune) *GlyphBitmap {
 	}
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	d := &font.Drawer{
+	d := &xfont.Drawer{
 		Dst:  img,
 		Src:  image.White,
 		Face: f.fontFace,
@@ -120,17 +131,17 @@ func (f *Face) RasterizeGlyph(r rune) *GlyphBitmap {
 	d.DrawString(string(r))
 
 	return &GlyphBitmap{
-		Pixels:  img.Pix,
-		Width:   w,
-		Height:  h,
-		Advance: float32(advance) / 64.0,
+		Pixels:   img.Pix,
+		Width:    w,
+		Height:   h,
+		Advance:  float32(advance) / 64.0,
 		BearingX: float32(bounds.Min.X) / 64.0,
 		BearingY: float32(bounds.Min.Y) / 64.0,
 	}
 }
 
 // measureCellWidth measures the advance width of 'M' for monospace grid sizing.
-func measureCellWidth(f font.Face) fixed.Int26_6 {
+func measureCellWidth(f xfont.Face) fixed.Int26_6 {
 	advance, _ := f.GlyphAdvance('M')
 	if advance == 0 {
 		advance, _ = f.GlyphAdvance('m')

@@ -1,6 +1,10 @@
 package renderer
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ghostty-go/ghostty-go/font"
+)
 
 func TestGlyphTopOffsetUsesFontAscent(t *testing.T) {
 	got := glyphTopOffset(15, -12)
@@ -56,5 +60,47 @@ func TestBuildDecorationDataCreatesLines(t *testing.T) {
 	}
 	if overlineY != 0 {
 		t.Fatalf("overline y offset = %f, want 0", overlineY)
+	}
+}
+
+func TestBuildTextDataRasterizesMissingGlyphs(t *testing.T) {
+	rasterizer := &fakeGlyphRasterizer{}
+	r := &Renderer{
+		atlas:           font.NewAtlas(32, 32),
+		cellAscent:      12,
+		gridRows:        1,
+		gridCols:        1,
+		glyphRasterizer: rasterizer,
+	}
+	grid := [][]Cell{{
+		{Char: '中', FG: Color{R: 1, G: 1, B: 1, A: 1}},
+	}}
+
+	count := r.buildTextData(grid)
+
+	if count != 1 {
+		t.Fatalf("text count = %d, want 1", count)
+	}
+	if rasterizer.calls != 1 {
+		t.Fatalf("rasterizer calls = %d, want 1", rasterizer.calls)
+	}
+	if _, ok := r.atlas.Get('中'); !ok {
+		t.Fatal("expected missing glyph to be added to atlas")
+	}
+}
+
+type fakeGlyphRasterizer struct {
+	calls int
+}
+
+func (f *fakeGlyphRasterizer) RasterizeGlyph(r rune) *font.GlyphBitmap {
+	f.calls++
+	return &font.GlyphBitmap{
+		Pixels:   []byte{255, 255, 255, 255},
+		Width:    1,
+		Height:   1,
+		Advance:  1,
+		BearingX: 0,
+		BearingY: -1,
 	}
 }

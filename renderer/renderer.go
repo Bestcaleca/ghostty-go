@@ -29,6 +29,11 @@ type Cell struct {
 	Overline      bool
 }
 
+// GlyphRasterizer provides rasterized glyph bitmaps for atlas population.
+type GlyphRasterizer interface {
+	RasterizeGlyph(r rune) *font.GlyphBitmap
+}
+
 // CursorStyle represents cursor display mode.
 type CursorStyle int
 
@@ -61,12 +66,13 @@ type Renderer struct {
 	cursorVBO     uint32
 
 	// Atlas texture
-	atlasTex   uint32
-	atlas      *font.Atlas
-	atlasW     int32
-	atlasH     int32
-	lastAtlasW int32
-	lastAtlasH int32
+	atlasTex        uint32
+	atlas           *font.Atlas
+	atlasW          int32
+	atlasH          int32
+	lastAtlasW      int32
+	lastAtlasH      int32
+	glyphRasterizer GlyphRasterizer
 
 	// Dimensions
 	cellW, cellH float32
@@ -99,40 +105,42 @@ type Renderer struct {
 
 // Config holds renderer configuration.
 type Config struct {
-	Width       int
-	Height      int
-	CellWidth   float32
-	CellHeight  float32
-	CellAscent  float32
-	GridCols    int
-	GridRows    int
-	PaddingX    float32
-	PaddingY    float32
-	BGColor     Color
-	CursorColor Color
-	CursorStyle CursorStyle
+	Width           int
+	Height          int
+	CellWidth       float32
+	CellHeight      float32
+	CellAscent      float32
+	GridCols        int
+	GridRows        int
+	PaddingX        float32
+	PaddingY        float32
+	BGColor         Color
+	CursorColor     Color
+	CursorStyle     CursorStyle
+	GlyphRasterizer GlyphRasterizer
 }
 
 // New creates a new Renderer. Must be called from the main thread with a current GL context.
 func New(cfg Config) *Renderer {
 	r := &Renderer{
-		cellW:          cfg.CellWidth,
-		cellH:          cfg.CellHeight,
-		cellAscent:     cfg.CellAscent,
-		gridCols:       cfg.GridCols,
-		gridRows:       cfg.GridRows,
-		screenW:        cfg.Width,
-		screenH:        cfg.Height,
-		paddingX:       cfg.PaddingX,
-		paddingY:       cfg.PaddingY,
-		bgColor:        cfg.BGColor,
-		cursorClr:      cfg.CursorColor,
-		cursorSty:      cfg.CursorStyle,
-		cursorVis:      true,
-		atlas:          font.NewAtlas(font.DefaultAtlasWidth, font.DefaultAtlasHeight),
-		bgData:         make([]float32, 0, cfg.GridCols*cfg.GridRows*6),
-		textData:       make([]float32, 0, cfg.GridCols*cfg.GridRows*12),
-		decorationData: make([]float32, 0, cfg.GridCols*cfg.GridRows*8),
+		cellW:           cfg.CellWidth,
+		cellH:           cfg.CellHeight,
+		cellAscent:      cfg.CellAscent,
+		gridCols:        cfg.GridCols,
+		gridRows:        cfg.GridRows,
+		screenW:         cfg.Width,
+		screenH:         cfg.Height,
+		paddingX:        cfg.PaddingX,
+		paddingY:        cfg.PaddingY,
+		bgColor:         cfg.BGColor,
+		cursorClr:       cfg.CursorColor,
+		cursorSty:       cfg.CursorStyle,
+		cursorVis:       true,
+		atlas:           font.NewAtlas(font.DefaultAtlasWidth, font.DefaultAtlasHeight),
+		glyphRasterizer: cfg.GlyphRasterizer,
+		bgData:          make([]float32, 0, cfg.GridCols*cfg.GridRows*6),
+		textData:        make([]float32, 0, cfg.GridCols*cfg.GridRows*12),
+		decorationData:  make([]float32, 0, cfg.GridCols*cfg.GridRows*8),
 	}
 
 	r.initShaders()
@@ -292,6 +300,11 @@ func (r *Renderer) SetGridSize(rows, cols int) {
 	r.gridCols = cols
 }
 
+// SetGlyphRasterizer sets the source used to populate missing atlas glyphs.
+func (r *Renderer) SetGlyphRasterizer(glyphs GlyphRasterizer) {
+	r.glyphRasterizer = glyphs
+}
+
 // DrawFrame renders a complete terminal frame.
 func (r *Renderer) DrawFrame(grid [][]Cell) {
 	gl.Clear(gl.COLOR_BUFFER_BIT)
@@ -404,6 +417,9 @@ func (r *Renderer) buildTextData(grid [][]Cell) int {
 			}
 
 			entry, ok := a.Get(c.Char)
+			if !ok {
+				entry, ok = r.ensureAtlasGlyph(c.Char)
+			}
 			if !ok || !entry.Valid {
 				continue
 			}
@@ -420,6 +436,21 @@ func (r *Renderer) buildTextData(grid [][]Cell) int {
 		}
 	}
 	return len(r.textData) / 12
+}
+
+func (r *Renderer) ensureAtlasGlyph(ch rune) (font.GlyphEntry, bool) {
+	if r.glyphRasterizer == nil {
+		return font.GlyphEntry{}, false
+	}
+	bmp := r.glyphRasterizer.RasterizeGlyph(ch)
+	if bmp == nil {
+		return font.GlyphEntry{}, false
+	}
+	entry := r.atlas.Add(ch, bmp)
+	if !entry.Valid {
+		return font.GlyphEntry{}, false
+	}
+	return entry, true
 }
 
 func (r *Renderer) buildDecorationData(grid [][]Cell) int {
@@ -486,12 +517,11 @@ func glyphTopOffset(cellAscent, glyphMinY float32) float32 {
 }
 
 // EnsureAtlasGlyph ensures a rune is in the atlas, rasterizing it if needed.
-func (r *Renderer) EnsureAtlasGlyph(f *font.Face, ch rune) {
+func (r *Renderer) EnsureAtlasGlyph(ch rune) {
 	if _, ok := r.atlas.Get(ch); ok {
 		return
 	}
-	bmp := f.RasterizeGlyph(ch)
-	r.atlas.Add(ch, bmp)
+	r.ensureAtlasGlyph(ch)
 }
 
 // SetBGColor sets the background clear color.
