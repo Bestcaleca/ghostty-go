@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/ghostty-go/ghostty-go/terminal"
 )
 
 func TestHelpTextListsShortcuts(t *testing.T) {
@@ -34,6 +36,29 @@ func TestFallbackFontCandidatesIncludeCJKFallback(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("fallback candidates do not include a CJK fallback: %v", candidates)
+	}
+}
+
+func TestTerminalCursorStyleFromConfig(t *testing.T) {
+	tests := []struct {
+		style string
+		blink bool
+		want  terminal.CursorStyle
+	}{
+		{"block", true, terminal.CursorDefault},
+		{"block", false, terminal.CursorSteadyBlock},
+		{"beam", true, terminal.CursorBlinkingBar},
+		{"beam", false, terminal.CursorSteadyBar},
+		{"underline", true, terminal.CursorBlinkingUnderline},
+		{"underline", false, terminal.CursorSteadyUnderline},
+		{"unknown", true, terminal.CursorDefault},
+	}
+
+	for _, tt := range tests {
+		got := terminalCursorStyleFromConfig(tt.style, tt.blink)
+		if got != tt.want {
+			t.Fatalf("terminalCursorStyleFromConfig(%q, %t) = %d, want %d", tt.style, tt.blink, got, tt.want)
+		}
 	}
 }
 

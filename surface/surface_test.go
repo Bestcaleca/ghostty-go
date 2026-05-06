@@ -214,3 +214,14 @@ func TestCursorBlinkEnabledForStyle(t *testing.T) {
 		t.Fatal("config should be able to disable blinking cursor styles")
 	}
 }
+
+func TestApplyInitialCursorStyle(t *testing.T) {
+	term := terminal.New(24, 80)
+
+	applyInitialCursorStyle(term, terminal.CursorBlinkingBar)
+
+	_, _, _, style := term.Cursor()
+	if style != terminal.CursorBlinkingBar {
+		t.Fatalf("cursor style = %d, want blinking bar", style)
+	}
+}

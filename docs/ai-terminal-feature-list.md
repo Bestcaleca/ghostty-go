@@ -85,6 +85,13 @@
 - 已保留滚动查看 scrollback 时隐藏光标的行为，并把终端可见性、blink 状态、scrollback 状态合并为统一判断。
 - 已增加光标闪烁策略和渲染可见性组合的回归测试。
 
+### 2026-05-06 Phase 0 第十一批
+
+- 已让配置项 `cursor-style` 初始化到 terminal cursor state，避免每帧渲染时被 terminal 默认 block 光标覆盖。
+- 已把 `cursor-style` 和 `cursor-blink` 合并映射为 terminal 的 blinking/steady block、beam、underline 样式。
+- 已让 surface 创建终端后立即应用初始 cursor style，后续 `DECSCUSR` 仍可由 TUI 程序覆盖。
+- 已增加配置到 terminal cursor style 映射、surface 初始光标样式应用的回归测试。
+
 ## P0：终端基础能力
 
 这些能力是 AI 功能上线前的地基。地基不稳，Agent 只会放大问题。

@@ -14,6 +14,7 @@ import (
 	"github.com/ghostty-go/ghostty-go/font"
 	"github.com/ghostty-go/ghostty-go/renderer"
 	"github.com/ghostty-go/ghostty-go/surface"
+	"github.com/ghostty-go/ghostty-go/terminal"
 )
 
 const version = "0.3.0"
@@ -169,6 +170,7 @@ func run() error {
 		Window:          window,
 		ScrollbackLines: cfg.ScrollbackLines,
 		CursorBlink:     cfg.CursorBlink,
+		CursorStyle:     terminalCursorStyleFromConfig(cfg.CursorStyle, cfg.CursorBlink),
 	})
 	if err != nil {
 		return fmt.Errorf("create surface: %w", err)
@@ -326,6 +328,26 @@ func loadFont(family string, size float64) (*font.Face, error) {
 	}
 
 	return nil, fmt.Errorf("no monospace font found in: %s", strings.Join(candidates, ", "))
+}
+
+func terminalCursorStyleFromConfig(style string, blink bool) terminal.CursorStyle {
+	switch style {
+	case "beam":
+		if blink {
+			return terminal.CursorBlinkingBar
+		}
+		return terminal.CursorSteadyBar
+	case "underline":
+		if blink {
+			return terminal.CursorBlinkingUnderline
+		}
+		return terminal.CursorSteadyUnderline
+	case "block":
+		if !blink {
+			return terminal.CursorSteadyBlock
+		}
+	}
+	return terminal.CursorDefault
 }
 
 func loadFontSet(family string, size float64) (*font.FaceSet, error) {

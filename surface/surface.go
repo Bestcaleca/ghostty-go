@@ -70,6 +70,7 @@ type Config struct {
 	Window          *glfw.Window
 	ScrollbackLines int
 	CursorBlink     bool
+	CursorStyle     terminal.CursorStyle
 }
 
 // New creates a new Surface.
@@ -78,6 +79,7 @@ func New(cfg Config) (*Surface, error) {
 	if cfg.ScrollbackLines > 0 {
 		term.SetMaxScroll(cfg.ScrollbackLines)
 	}
+	applyInitialCursorStyle(term, cfg.CursorStyle)
 	msgChan := make(chan termio.Message, 16)
 
 	tio, err := termio.New(termio.Config{
@@ -544,6 +546,13 @@ func cursorBlinkEnabled(style terminal.CursorStyle, configBlink bool) bool {
 	default:
 		return true
 	}
+}
+
+func applyInitialCursorStyle(term *terminal.Terminal, style terminal.CursorStyle) {
+	if style == terminal.CursorDefault {
+		return
+	}
+	term.Active().Cursor.Style = style
 }
 
 // RenderGrid converts the terminal grid to renderer cells and draws a frame.
