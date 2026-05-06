@@ -436,6 +436,92 @@ func TestTerminalInsertMode(t *testing.T) {
 	}
 }
 
+func TestTerminalDECSCSavesAndRestoresCursor(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{5, 10},
+		ParamCount: 2,
+	})
+	term.EscDispatch(parser.EscDispatchAction{Final: '7'})
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{9, 20},
+		ParamCount: 2,
+	})
+	term.EscDispatch(parser.EscDispatchAction{Final: '8'})
+
+	row, col, _, _ := term.Cursor()
+	if row != 4 || col != 9 {
+		t.Fatalf("cursor = %d,%d, want 4,9", row, col)
+	}
+}
+
+func TestTerminalSCPSavesAndRestoresCursor(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{3, 4},
+		ParamCount: 2,
+	})
+	term.CSIDispatch(parser.CSIDispatchAction{Final: 's'})
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{8, 9},
+		ParamCount: 2,
+	})
+	term.CSIDispatch(parser.CSIDispatchAction{Final: 'u'})
+
+	row, col, _, _ := term.Cursor()
+	if row != 2 || col != 3 {
+		t.Fatalf("cursor = %d,%d, want 2,3", row, col)
+	}
+}
+
+func TestTerminalAltScreen1049RestoresPrimaryCursor(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{6, 7},
+		ParamCount: 2,
+	})
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{1049},
+		ParamCount: 1,
+	})
+	if term.active != term.alternate {
+		t.Fatal("expected alternate screen")
+	}
+	if !term.primary.SavedCursor.Valid || term.primary.SavedCursor.Row != 5 || term.primary.SavedCursor.Col != 6 {
+		t.Fatalf("primary saved cursor = %+v, want row=5 col=6 valid", term.primary.SavedCursor)
+	}
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{2, 2},
+		ParamCount: 2,
+	})
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'l',
+		Private:    true,
+		Params:     [24]uint16{1049},
+		ParamCount: 1,
+	})
+
+	if term.active != term.primary {
+		t.Fatal("expected primary screen")
+	}
+	row, col, _, _ := term.Cursor()
+	if row != 5 || col != 6 {
+		t.Fatalf("cursor = %d,%d, want 5,6", row, col)
+	}
+}
+
 // TestStreamEndToEnd tests the full pipeline: raw bytes -> parser -> terminal
 func TestStreamEndToEnd(t *testing.T) {
 	term := newTestTerminal(24, 80)

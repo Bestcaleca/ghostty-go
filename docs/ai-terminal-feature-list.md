@@ -42,6 +42,14 @@
 - 已接入 focus in/out 事件 (`DECSET ?1004`)，窗口焦点变化时可发送 `CSI I` / `CSI O`。
 - 已增加 SGR mouse、motion、focus mode 和 surface 路由 helper 的回归测试。
 
+### 2026-05-06 Phase 0 第五批
+
+- 已实现 `ESC 7` / `ESC 8` 的 DECSC/DECRC 光标保存恢复。
+- 已实现 `CSI s` / `CSI u` 的 SCP/RCP 光标保存恢复。
+- 已让保存状态包含 cursor style、visible、charset、origin mode 和 auto-wrap mode。
+- 已修正 `DECSET ?1049`，先保存主屏光标再进入备用屏，退出备用屏时恢复主屏光标。
+- 已增加 ESC、CSI 和 1049 备用屏保存恢复回归测试。
+
 ## P0：终端基础能力
 
 这些能力是 AI 功能上线前的地基。地基不稳，Agent 只会放大问题。

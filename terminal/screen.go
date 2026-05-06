@@ -2,29 +2,30 @@ package terminal
 
 // Screen represents a terminal screen (primary or alternate).
 type Screen struct {
-	Rows    []Row
-	Cursor  Cursor
-	Modes   ModeState
-	Styles  *StyleTable
-	Tabstops Tabstops
-	Charset CharsetState
+	Rows        []Row
+	Cursor      Cursor
+	Modes       ModeState
+	Styles      *StyleTable
+	Tabstops    Tabstops
+	Charset     CharsetState
+	SavedCursor SavedCursor
 
 	Title string
 	PWD   string
 
-	Scrollback []Row   // scrollback buffer
-	MaxScroll  int     // max scrollback lines
+	Scrollback []Row // scrollback buffer
+	MaxScroll  int   // max scrollback lines
 	Selection  Selection
 }
 
 // NewScreen creates a new screen with the given dimensions.
 func NewScreen(rows, cols int) *Screen {
 	s := &Screen{
-		Rows:     make([]Row, rows),
-		Styles:   NewStyleTable(),
-		Tabstops: NewTabstops(cols),
-		Charset:  NewCharsetState(),
-		Cursor:   Cursor{Visible: true},
+		Rows:      make([]Row, rows),
+		Styles:    NewStyleTable(),
+		Tabstops:  NewTabstops(cols),
+		Charset:   NewCharsetState(),
+		Cursor:    Cursor{Visible: true},
 		MaxScroll: 10000,
 	}
 	for i := range s.Rows {

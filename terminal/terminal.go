@@ -466,11 +466,11 @@ func (t *Terminal) CSIDispatch(a parser.CSIDispatchAction) {
 		bottom := int(a.Param(2, uint16(t.Rows)))
 		t.setScrollRegion(top, bottom)
 	case 's': // SCP - Save Cursor Position
-		// TODO: save cursor
+		t.saveCursor()
 	case 't': // Window manipulation (xterm)
 		// TODO: handle window ops
 	case 'u': // RCP - Restore Cursor Position
-		// TODO: restore cursor
+		t.restoreCursor()
 	}
 }
 
@@ -876,11 +876,20 @@ func (t *Terminal) setCursorStyle(mode int) {
 
 func (t *Terminal) saveCursor() {
 	s := t.active
-	s.Cursor.Save(s.Charset, s.Modes.DecOM, s.Modes.DecAWM)
+	s.SavedCursor = s.Cursor.Save(s.Charset, s.Modes.DecOM, s.Modes.DecAWM)
 }
 
 func (t *Terminal) restoreCursor() {
-	// TODO: restore from saved state
+	s := t.active
+	if !s.SavedCursor.Valid {
+		return
+	}
+	s.Cursor.Restore(s.SavedCursor)
+	s.Cursor.Row = clamp(s.Cursor.Row, 0, t.Rows-1)
+	s.Cursor.Col = clamp(s.Cursor.Col, 0, t.Cols-1)
+	s.Charset = s.SavedCursor.Charset
+	s.Modes.DecOM = s.SavedCursor.Origin
+	s.Modes.DecAWM = s.SavedCursor.Wrap
 }
 
 func (t *Terminal) fullReset() {
@@ -923,8 +932,8 @@ func (t *Terminal) setDecModeWithAction(mode Mode) {
 	case ModeDecAltScreen:
 		t.switchToAltScreen()
 	case ModeDecAltScreenSaveCur:
-		t.switchToAltScreen()
 		t.saveCursor()
+		t.switchToAltScreen()
 	default:
 		t.active.Modes.SetDecMode(mode)
 	}
@@ -936,6 +945,7 @@ func (t *Terminal) resetDecModeWithAction(mode Mode) {
 		t.switchToPrimaryScreen()
 	case ModeDecAltScreenSaveCur:
 		t.switchToPrimaryScreen()
+		t.restoreCursor()
 	default:
 		t.active.Modes.ResetDecMode(mode)
 	}
