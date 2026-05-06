@@ -522,6 +522,73 @@ func TestTerminalAltScreen1049RestoresPrimaryCursor(t *testing.T) {
 	}
 }
 
+func TestTerminalAltScreen47SwitchesBuffers(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	term.Print('P')
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{47},
+		ParamCount: 1,
+	})
+	if term.active != term.alternate {
+		t.Fatal("expected alternate screen after DECSET 47")
+	}
+	term.Print('A')
+	if grid := term.Grid(); grid[0][0].Char != 'A' {
+		t.Fatalf("alternate grid[0][0] = %q, want 'A'", grid[0][0].Char)
+	}
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'l',
+		Private:    true,
+		Params:     [24]uint16{47},
+		ParamCount: 1,
+	})
+	if term.active != term.primary {
+		t.Fatal("expected primary screen after DECRST 47")
+	}
+	if grid := term.Grid(); grid[0][0].Char != 'P' {
+		t.Fatalf("primary grid[0][0] = %q, want 'P'", grid[0][0].Char)
+	}
+}
+
+func TestTerminalDecSaveCursor1048RestoresWithoutAltScreen(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{4, 5},
+		ParamCount: 2,
+	})
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'h',
+		Private:    true,
+		Params:     [24]uint16{1048},
+		ParamCount: 1,
+	})
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{9, 10},
+		ParamCount: 2,
+	})
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'l',
+		Private:    true,
+		Params:     [24]uint16{1048},
+		ParamCount: 1,
+	})
+
+	if term.active != term.primary {
+		t.Fatal("expected 1048 to leave active screen unchanged")
+	}
+	row, col, _, _ := term.Cursor()
+	if row != 3 || col != 4 {
+		t.Fatalf("cursor = %d,%d, want 3,4", row, col)
+	}
+}
+
 func TestTerminalAltScreen1049StartsFreshEachEntry(t *testing.T) {
 	term := newTestTerminal(24, 80)
 

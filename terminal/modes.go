@@ -64,7 +64,7 @@ const (
 	ModeDecINLM             Mode = 9    // Interlace mode
 	ModeDecTextCursorBlink  Mode = 12   // Cursor blink
 	ModeDecMouseX10         Mode = 9    // X10 mouse tracking
-	ModeDecAltScreenSave    Mode = 47   // Alternate screen buffer
+	ModeDecAltScreenSave    Mode = 47   // Legacy alternate screen buffer
 	ModeDecTextCursorEnable Mode = 25   // Cursor visible
 	ModeDecMouseNormal      Mode = 1000 // Normal mouse tracking
 	ModeDecMouseHighlight   Mode = 1001 // Highlight mouse tracking
@@ -73,6 +73,7 @@ const (
 	ModeDecFocusEvents      Mode = 1004 // Focus events
 	ModeDecMouseSGR         Mode = 1006 // SGR extended mouse coordinates
 	ModeDecAltScreen        Mode = 1047 // Alternate screen (xterm)
+	ModeDecSaveCursor       Mode = 1048 // Save/restore cursor (xterm)
 	ModeDecAltScreenSaveCur Mode = 1049 // Alternate screen + save cursor
 	ModeDecBracketedPaste   Mode = 2004 // Bracketed paste
 	ModeDecAltScroll        Mode = 1007 // Alternate scroll

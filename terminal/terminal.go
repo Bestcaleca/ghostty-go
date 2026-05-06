@@ -934,8 +934,10 @@ func (t *Terminal) resetMode(a parser.CSIDispatchAction) {
 
 func (t *Terminal) setDecModeWithAction(mode Mode) {
 	switch mode {
-	case ModeDecAltScreen:
+	case ModeDecAltScreenSave, ModeDecAltScreen:
 		t.switchToAltScreen()
+	case ModeDecSaveCursor:
+		t.saveCursor()
 	case ModeDecAltScreenSaveCur:
 		t.saveCursor()
 		t.switchToAltScreen()
@@ -946,8 +948,10 @@ func (t *Terminal) setDecModeWithAction(mode Mode) {
 
 func (t *Terminal) resetDecModeWithAction(mode Mode) {
 	switch mode {
-	case ModeDecAltScreen:
+	case ModeDecAltScreenSave, ModeDecAltScreen:
 		t.switchToPrimaryScreen()
+	case ModeDecSaveCursor:
+		t.restoreCursor()
 	case ModeDecAltScreenSaveCur:
 		t.switchToPrimaryScreen()
 		t.restoreCursor()
