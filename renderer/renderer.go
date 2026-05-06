@@ -260,6 +260,12 @@ func (r *Renderer) Resize(width, height int) {
 	r.updateProjection()
 }
 
+// SetGridSize updates the terminal grid bounds used for instanced rendering.
+func (r *Renderer) SetGridSize(rows, cols int) {
+	r.gridRows = rows
+	r.gridCols = cols
+}
+
 // DrawFrame renders a complete terminal frame.
 func (r *Renderer) DrawFrame(grid [][]Cell) {
 	gl.Clear(gl.COLOR_BUFFER_BIT)

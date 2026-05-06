@@ -89,3 +89,23 @@ func TestApplyTextStyleBoldAndFaint(t *testing.T) {
 		t.Fatalf("faint did not dim foreground: got %f, want < %f", faint.FG.R, cell.FG.R)
 	}
 }
+
+func TestGridSizeFromPixels(t *testing.T) {
+	metrics := renderer.CellMetrics{CellWidth: 10, CellHeight: 20}
+
+	rows, cols := gridSizeFromPixels(1000, 600, metrics)
+
+	if rows != 30 || cols != 100 {
+		t.Fatalf("grid size = %dx%d, want 30x100", rows, cols)
+	}
+}
+
+func TestGridSizeFromPixelsHasMinimumOneCell(t *testing.T) {
+	metrics := renderer.CellMetrics{CellWidth: 10, CellHeight: 20}
+
+	rows, cols := gridSizeFromPixels(1, 1, metrics)
+
+	if rows != 1 || cols != 1 {
+		t.Fatalf("grid size = %dx%d, want minimum 1x1", rows, cols)
+	}
+}

@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ghostty-go/ghostty-go/parser"
 )
@@ -171,6 +172,84 @@ func TestTerminalSGR(t *testing.T) {
 	}
 }
 
+func TestTerminalSGR256Color(t *testing.T) {
+	term := newTestTerminal(24, 80)
+
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'm',
+		Params:     [24]uint16{38, 5, 196},
+		ParamCount: 3,
+	})
+
+	if got := term.CurrentStyle.FG; got.R != 255 || got.G != 0 || got.B != 0 || !got.Valid {
+		t.Fatalf("expected palette color 196, got %+v", got)
+	}
+}
+
+func TestTerminalREPRepeatsPreviousCharacter(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	term.Print('A')
+
+	done := make(chan struct{})
+	go func() {
+		term.CSIDispatch(parser.CSIDispatchAction{
+			Final:      'b',
+			Params:     [24]uint16{3},
+			ParamCount: 1,
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("REP dispatch deadlocked")
+	}
+
+	grid := term.Grid()
+	for col := 0; col < 4; col++ {
+		if grid[0][col].Char != 'A' {
+			t.Fatalf("grid[0][%d] = %q, want 'A'", col, grid[0][col].Char)
+		}
+	}
+}
+
+func TestTerminalDeviceReportsRespond(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	var responses [][]byte
+	term.SetRespond(func(data []byte) {
+		responses = append(responses, append([]byte(nil), data...))
+	})
+
+	term.CSIDispatch(parser.CSIDispatchAction{Final: 'c'})
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'n',
+		Params:     [24]uint16{5},
+		ParamCount: 1,
+	})
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'H',
+		Params:     [24]uint16{3, 4},
+		ParamCount: 2,
+	})
+	term.CSIDispatch(parser.CSIDispatchAction{
+		Final:      'n',
+		Params:     [24]uint16{6},
+		ParamCount: 1,
+	})
+	term.EscDispatch(parser.EscDispatchAction{Final: 'Z'})
+
+	want := []string{"\x1b[?1;2c", "\x1b[0n", "\x1b[3;4R", "\x1b[?1;2c"}
+	if len(responses) != len(want) {
+		t.Fatalf("got %d responses, want %d: %q", len(responses), len(want), responses)
+	}
+	for i := range want {
+		if string(responses[i]) != want[i] {
+			t.Fatalf("response %d = %q, want %q", i, responses[i], want[i])
+		}
+	}
+}
+
 func TestTerminalScrollRegion(t *testing.T) {
 	term := newTestTerminal(5, 10)
 
@@ -330,6 +409,38 @@ func TestStreamEndToEnd(t *testing.T) {
 	oStyle := term.active.Styles.Lookup(grid[1][1].Style)
 	if oStyle.FG.R != 205 {
 		t.Errorf("expected red FG for 'o', got R=%d", oStyle.FG.R)
+	}
+}
+
+func TestStreamPrintsUTF8Runes(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	stream := NewStream(term)
+
+	stream.Process([]byte("é中"))
+
+	grid := term.Grid()
+	if grid[0][0].Char != 'é' {
+		t.Fatalf("grid[0][0] = %q, want 'é'", grid[0][0].Char)
+	}
+	if grid[0][1].Char != '中' {
+		t.Fatalf("grid[0][1] = %q, want '中'", grid[0][1].Char)
+	}
+	if grid[0][2].Char != 0 {
+		t.Fatalf("wide character spacer = %q, want zero-width spacer", grid[0][2].Char)
+	}
+}
+
+func TestStreamKeepsSplitUTF8RuneAcrossProcessCalls(t *testing.T) {
+	term := newTestTerminal(24, 80)
+	stream := NewStream(term)
+
+	stream.Process([]byte{0xE4})
+	stream.Process([]byte{0xB8})
+	stream.Process([]byte{0xAD})
+
+	grid := term.Grid()
+	if grid[0][0].Char != '中' {
+		t.Fatalf("grid[0][0] = %q, want '中'", grid[0][0].Char)
 	}
 }
 

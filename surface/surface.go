@@ -367,14 +367,34 @@ func (s *Surface) HandleResize(width, height int) {
 	s.renderer.Resize(width, height)
 
 	metrics := s.renderer.Metrics()
-	cols := int(float64(width) / float64(metrics.CellWidth))
-	rows := int(float64(height) / float64(metrics.CellHeight))
+	rows, cols := gridSizeFromPixels(width, height, metrics)
 
 	if cols != s.cols || rows != s.rows {
 		s.cols = cols
 		s.rows = rows
-		s.termio.Resize(rows, cols)
+		s.renderer.SetGridSize(rows, cols)
+		if s.terminal != nil {
+			s.terminal.Resize(rows, cols)
+		}
+		if s.termio != nil {
+			s.termio.Resize(rows, cols)
+		}
 	}
+}
+
+func gridSizeFromPixels(width, height int, metrics renderer.CellMetrics) (rows, cols int) {
+	if metrics.CellWidth <= 0 || metrics.CellHeight <= 0 {
+		return 1, 1
+	}
+	cols = int(float64(width) / float64(metrics.CellWidth))
+	rows = int(float64(height) / float64(metrics.CellHeight))
+	if cols < 1 {
+		cols = 1
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	return rows, cols
 }
 
 // ProcessMessages drains the message channel and fires callbacks.

@@ -24,11 +24,11 @@ type Terminal struct {
 	alternate *Screen
 	active    *Screen // points to primary or alternate
 
-	Rows, Cols     int
-	WidthPx        int
-	HeightPx       int
-	ScrollRegion   ScrollRegion
-	PreviousChar   rune
+	Rows, Cols   int
+	WidthPx      int
+	HeightPx     int
+	ScrollRegion ScrollRegion
+	PreviousChar rune
 
 	// Current SGR state (applied to new characters)
 	CurrentStyle Style
@@ -38,9 +38,9 @@ type Terminal struct {
 
 	// Callbacks
 	clipboardWrite func(clipboard string, data []byte) // write to system clipboard
-	clipboardRead  func(clipboard string) []byte        // read from system clipboard
-	respond        func(data []byte)                    // send data back to shell
-	bell           func()                               // terminal bell
+	clipboardRead  func(clipboard string) []byte       // read from system clipboard
+	respond        func(data []byte)                   // send data back to shell
+	bell           func()                              // terminal bell
 
 	mu sync.RWMutex
 }
@@ -240,6 +240,10 @@ func (t *Terminal) Print(ch rune) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	t.printLocked(ch)
+}
+
+func (t *Terminal) printLocked(ch rune) {
 	s := t.active
 	cols := s.Width()
 
@@ -412,47 +416,47 @@ func (t *Terminal) CSIDispatch(a parser.CSIDispatchAction) {
 			t.active.Cursor.Col = t.active.Tabstops.Prev(t.active.Cursor.Col)
 		}
 	case '`': // HPA - Horizontal Position Absolute
-			n := int(a.Param(1, 1))
-			t.active.Cursor.Col = clamp(n-1, 0, t.Cols-1)
-		case 'a': // HPR - Horizontal Position Relative
-			n := int(a.Param(1, 1))
-			t.active.Cursor.Col = clamp(t.active.Cursor.Col+n, 0, t.Cols-1)
-		case 'b': // REP - Repeat Character
-			n := int(a.Param(1, 1))
-			for i := 0; i < n; i++ {
-				t.Print(t.PreviousChar)
-			}
-		case 'c': // DA - Device Attributes
-			// TODO: send response
-		case 'd': // VPA - Vertical Position Absolute
-			n := int(a.Param(1, 1))
-			t.setCursor(n-1, t.active.Cursor.Col)
-		case 'f': // HVP - Horizontal Vertical Position
-			row := int(a.Param(1, 1)) - 1
-			col := int(a.Param(2, 1)) - 1
-			t.setCursor(row, col)
-		case 'g': // TBC - Tab Clear
-			t.clearTab(int(a.Param(1, 0)))
-		case 'h': // SM - Set Mode
-			t.setMode(a)
-		case 'l': // RM - Reset Mode
-			t.resetMode(a)
-		case 'm': // SGR - Select Graphic Rendition
-			t.handleSGR(a)
-		case 'n': // DSR - Device Status Report
-			// TODO: send response
-		case 'q': // DECSCUSR - Set Cursor Style
-			t.setCursorStyle(int(a.Param(1, 0)))
-		case 'r': // DECSTBM - Set Scrolling Region
-			top := int(a.Param(1, 1)) - 1
-			bottom := int(a.Param(2, uint16(t.Rows)))
-			t.setScrollRegion(top, bottom)
-		case 's': // SCP - Save Cursor Position
-			// TODO: save cursor
-		case 't': // Window manipulation (xterm)
-			// TODO: handle window ops
-		case 'u': // RCP - Restore Cursor Position
-			// TODO: restore cursor
+		n := int(a.Param(1, 1))
+		t.active.Cursor.Col = clamp(n-1, 0, t.Cols-1)
+	case 'a': // HPR - Horizontal Position Relative
+		n := int(a.Param(1, 1))
+		t.active.Cursor.Col = clamp(t.active.Cursor.Col+n, 0, t.Cols-1)
+	case 'b': // REP - Repeat Character
+		n := int(a.Param(1, 1))
+		for i := 0; i < n; i++ {
+			t.printLocked(t.PreviousChar)
+		}
+	case 'c': // DA - Device Attributes
+		t.respondPrimaryDeviceAttributes()
+	case 'd': // VPA - Vertical Position Absolute
+		n := int(a.Param(1, 1))
+		t.setCursor(n-1, t.active.Cursor.Col)
+	case 'f': // HVP - Horizontal Vertical Position
+		row := int(a.Param(1, 1)) - 1
+		col := int(a.Param(2, 1)) - 1
+		t.setCursor(row, col)
+	case 'g': // TBC - Tab Clear
+		t.clearTab(int(a.Param(1, 0)))
+	case 'h': // SM - Set Mode
+		t.setMode(a)
+	case 'l': // RM - Reset Mode
+		t.resetMode(a)
+	case 'm': // SGR - Select Graphic Rendition
+		t.handleSGR(a)
+	case 'n': // DSR - Device Status Report
+		t.respondDeviceStatus(int(a.Param(1, 0)))
+	case 'q': // DECSCUSR - Set Cursor Style
+		t.setCursorStyle(int(a.Param(1, 0)))
+	case 'r': // DECSTBM - Set Scrolling Region
+		top := int(a.Param(1, 1)) - 1
+		bottom := int(a.Param(2, uint16(t.Rows)))
+		t.setScrollRegion(top, bottom)
+	case 's': // SCP - Save Cursor Position
+		// TODO: save cursor
+	case 't': // Window manipulation (xterm)
+		// TODO: handle window ops
+	case 'u': // RCP - Restore Cursor Position
+		// TODO: restore cursor
 	}
 }
 
@@ -500,7 +504,7 @@ func (t *Terminal) EscDispatch(a parser.EscDispatchAction) {
 	case 'O': // SS3 - Single Shift 3
 		t.active.Charset.SingleShift = 3
 	case 'Z': // DECID - Identify Terminal
-		// TODO: send response
+		t.respondPrimaryDeviceAttributes()
 	case '=': // DECKPAM - Application Keypad Mode
 		// TODO
 	case '>': // DECKPNM - Normal Keypad Mode
@@ -531,6 +535,26 @@ func (t *Terminal) EscDispatch(a parser.EscDispatchAction) {
 		case '+':
 			t.active.Charset.G3 = mapCharsetFinal(a.Final)
 		}
+	}
+}
+
+func (t *Terminal) respondPrimaryDeviceAttributes() {
+	t.respondBytes([]byte("\x1b[?1;2c"))
+}
+
+func (t *Terminal) respondDeviceStatus(kind int) {
+	switch kind {
+	case 5:
+		t.respondBytes([]byte("\x1b[0n"))
+	case 6:
+		response := fmt.Sprintf("\x1b[%d;%dR", t.active.Cursor.Row+1, t.active.Cursor.Col+1)
+		t.respondBytes([]byte(response))
+	}
+}
+
+func (t *Terminal) respondBytes(data []byte) {
+	if t.respond != nil {
+		t.respond(data)
 	}
 }
 
@@ -1005,12 +1029,14 @@ func (t *Terminal) parseExtendedColor(a parser.CSIDispatchAction, start int) (Co
 		if start+1 < a.ParamCount {
 			idx := int(a.Params[start+1])
 			if idx >= 0 && idx < 256 {
-				return t.active.Styles.Lookup(0).FG, 1 // use palette from screen
+				return DefaultPalette()[idx], 2
 			}
-			return DefaultPalette()[idx], 2
 		}
 	case 2: // True color: 38;2;r;g;b
 		if start+3 < a.ParamCount {
+			if a.Params[start+1] > 255 || a.Params[start+2] > 255 || a.Params[start+3] > 255 {
+				return ColorNone, 0
+			}
 			r := uint8(a.Params[start+1])
 			g := uint8(a.Params[start+2])
 			b := uint8(a.Params[start+3])
