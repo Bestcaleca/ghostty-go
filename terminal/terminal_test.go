@@ -43,6 +43,39 @@ func TestTerminalNewline(t *testing.T) {
 	}
 }
 
+func TestTerminalAutoWrapEnabledByDefault(t *testing.T) {
+	term := newTestTerminal(2, 3)
+	for _, ch := range []rune{'A', 'B', 'C', 'D'} {
+		term.Print(ch)
+	}
+
+	grid := term.Grid()
+	if grid[0][2].Char != 'C' {
+		t.Fatalf("grid[0][2] = %q, want 'C'", grid[0][2].Char)
+	}
+	if grid[1][0].Char != 'D' {
+		t.Fatalf("grid[1][0] = %q, want 'D'", grid[1][0].Char)
+	}
+}
+
+func TestTerminalWideCharWrapsBeforeRightMargin(t *testing.T) {
+	term := newTestTerminal(2, 3)
+	term.Print('A')
+	term.Print('B')
+	term.Print('中')
+
+	grid := term.Grid()
+	if grid[0][2].Char != ' ' {
+		t.Fatalf("grid[0][2] = %q, want blank before wide char wrap", grid[0][2].Char)
+	}
+	if grid[1][0].Char != '中' {
+		t.Fatalf("grid[1][0] = %q, want '中'", grid[1][0].Char)
+	}
+	if grid[1][1].Char != 0 || grid[1][1].Width != 0 {
+		t.Fatalf("wide char spacer = %q/%d, want zero-width spacer", grid[1][1].Char, grid[1][1].Width)
+	}
+}
+
 func TestTerminalCarriageReturn(t *testing.T) {
 	term := newTestTerminal(24, 80)
 	term.Print('A')

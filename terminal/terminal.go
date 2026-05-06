@@ -291,6 +291,16 @@ func (t *Terminal) printLocked(ch rune) {
 
 	// Determine character width
 	width := CharWidth(ch)
+	if width == 2 && col == cols-1 && s.Modes.DecAWM {
+		s.Cursor.Col = 0
+		if s.Cursor.Row < t.ScrollRegion.Bottom-1 {
+			s.Cursor.Row++
+		} else {
+			s.ScrollUp(t.ScrollRegion.Top, t.ScrollRegion.Bottom, 1)
+		}
+		row = s.Cursor.Row
+		col = s.Cursor.Col
+	}
 
 	// In insert mode, shift cells right
 	if s.Modes.Insert && width > 0 {

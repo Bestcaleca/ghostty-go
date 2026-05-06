@@ -24,6 +24,7 @@ type Screen struct {
 func NewScreen(rows, cols int) *Screen {
 	s := &Screen{
 		Rows:              make([]Row, rows),
+		Modes:             ModeState{DecAWM: true},
 		Styles:            NewStyleTable(),
 		Tabstops:          NewTabstops(cols),
 		Charset:           NewCharsetState(),
