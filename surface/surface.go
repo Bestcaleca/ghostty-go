@@ -42,6 +42,9 @@ type Surface struct {
 	lastClickCol  int
 	clickCount    int
 
+	// Context menu state
+	contextMenu contextMenu
+
 	// Bell state
 	visualBell bool
 	bellTime   time.Time
@@ -58,11 +61,11 @@ type Surface struct {
 
 // Config holds surface configuration.
 type Config struct {
-	Rows           int
-	Cols           int
-	Shell          string
-	Renderer       *renderer.Renderer
-	Window         *glfw.Window
+	Rows            int
+	Cols            int
+	Shell           string
+	Renderer        *renderer.Renderer
+	Window          *glfw.Window
 	ScrollbackLines int
 }
 
@@ -229,6 +232,16 @@ func (s *Surface) HandleMouseButton(button glfw.MouseButton, action glfw.Action,
 	metrics := s.renderer.Metrics()
 	col := int(x / float64(metrics.CellWidth))
 	row := int(y / float64(metrics.CellHeight))
+
+	if s.contextMenu.visible && action == glfw.Press {
+		s.handleContextMenuClick(row, col)
+		return
+	}
+
+	if button == glfw.MouseButtonRight && action == glfw.Press {
+		s.contextMenu = newContextMenu(row, col, s.rows, s.cols)
+		return
+	}
 
 	if button == glfw.MouseButtonLeft {
 		if action == glfw.Press {
@@ -451,19 +464,24 @@ func (s *Surface) RenderGrid() {
 			fg := styleToColor(style.FG, renderer.Color{R: 0.9, G: 0.9, B: 0.9, A: 1.0})
 			bg := styleToColor(style.BG, renderer.Color{R: 0.1, G: 0.1, B: 0.12, A: 1.0})
 
-			// Highlight selected cells
-			if s.terminal.SelectionIsSelected(row, col) {
-				fg, bg = bg, fg // swap colors for selection
-			}
-
-			renderGrid[row][col] = renderer.Cell{
+			cell := renderer.Cell{
 				Char:  c.Char,
 				FG:    fg,
 				BG:    bg,
 				Width: int(c.Width),
 			}
+			cell = applyTextStyle(cell, style)
+
+			// Highlight selected cells
+			if s.terminal.SelectionIsSelected(row, col) {
+				cell.FG, cell.BG = cell.BG, cell.FG
+			}
+
+			renderGrid[row][col] = cell
 		}
 	}
+
+	applyContextMenuOverlay(renderGrid, s.contextMenu)
 
 	// Hide cursor when scrolled back
 	cursorVisible := s.UpdateCursor()
@@ -517,6 +535,64 @@ func (s *Surface) GetHyperlink(row, col int) string {
 // Terminal returns the underlying terminal (for testing).
 func (s *Surface) Terminal() *terminal.Terminal {
 	return s.terminal
+}
+
+func (s *Surface) handleContextMenuClick(row, col int) {
+	action, ok := s.contextMenu.actionAt(row, col)
+	s.contextMenu.visible = false
+	if !ok {
+		return
+	}
+
+	switch action {
+	case contextMenuCopy:
+		text := s.terminal.GetSelectedText()
+		if text != "" && s.window != nil {
+			s.window.SetClipboardString(text)
+		}
+	case contextMenuPaste:
+		if s.window != nil {
+			text := s.window.GetClipboardString()
+			if text != "" {
+				s.HandlePaste(text)
+			}
+		}
+	case contextMenuClearSelection:
+		s.terminal.SelectionClear()
+	}
+}
+
+func applyTextStyle(cell renderer.Cell, style terminal.Style) renderer.Cell {
+	if style.Reverse {
+		cell.FG, cell.BG = cell.BG, cell.FG
+	}
+	if style.Bold {
+		cell.FG = scaleColor(cell.FG, 1.25)
+	}
+	if style.Faint {
+		cell.FG = scaleColor(cell.FG, 0.6)
+	}
+	if style.Invisible {
+		cell.Char = ' '
+	}
+	return cell
+}
+
+func scaleColor(c renderer.Color, factor float32) renderer.Color {
+	c.R = clampUnit(c.R * factor)
+	c.G = clampUnit(c.G * factor)
+	c.B = clampUnit(c.B * factor)
+	return c
+}
+
+func clampUnit(v float32) float32 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 func styleToColor(c terminal.Color, fallback renderer.Color) renderer.Color {

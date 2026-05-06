@@ -16,6 +16,7 @@ layout(location = 1) in vec4 cell_color; // RGBA background (instance)
 
 uniform mat4 projection;
 uniform vec2 cell_size;
+uniform vec2 padding;
 
 out vec4 bg_color;
 
@@ -25,7 +26,7 @@ void main() {
         float(gl_VertexID == 2 || gl_VertexID == 3)
     );
 
-    vec2 pos = cell_pos * cell_size + cell_size * corner;
+    vec2 pos = padding + cell_pos * cell_size + cell_size * corner;
     gl_Position = projection * vec4(pos, 0.0, 1.0);
     bg_color = cell_color;
 }
@@ -46,15 +47,16 @@ void main() {
 const textVertSrc = `
 #version 410 core
 
-layout(location = 0) in uvec2 atlas_pos;   // atlas position (instance)
-layout(location = 1) in uvec2 glyph_size;  // glyph dimensions (instance)
-layout(location = 2) in ivec2 bearings;    // left, top bearing (instance)
-layout(location = 3) in uvec2 grid_pos;    // col, row (instance)
-layout(location = 4) in uvec4 color;       // RGBA foreground (instance)
+layout(location = 0) in vec2 atlas_pos;   // atlas position (instance)
+layout(location = 1) in vec2 glyph_size;  // glyph dimensions (instance)
+layout(location = 2) in vec2 bearings;    // left, top bearing (instance)
+layout(location = 3) in vec2 grid_pos;    // col, row (instance)
+layout(location = 4) in vec4 color;       // RGBA foreground (instance)
 
 uniform mat4 projection;
 uniform vec2 cell_size;
 uniform vec2 atlas_size;
+uniform vec2 padding;
 
 out vec2 tex_coord;
 out vec4 fg_color;
@@ -65,7 +67,7 @@ void main() {
         float(gl_VertexID == 2 || gl_VertexID == 3)
     );
 
-    vec2 cell_pixel = vec2(grid_pos) * cell_size;
+    vec2 cell_pixel = padding + vec2(grid_pos) * cell_size;
     vec2 pos = cell_pixel + vec2(bearings) + vec2(glyph_size) * corner;
 
     gl_Position = projection * vec4(pos, 0.0, 1.0);
@@ -75,7 +77,7 @@ void main() {
     vec2 size_norm = vec2(glyph_size) / atlas_size;
     tex_coord = atlas_norm + size_norm * corner;
 
-    fg_color = vec4(color) / 255.0;
+    fg_color = color;
 }
 ` + "\x00"
 
@@ -90,7 +92,7 @@ uniform sampler2D atlas;
 out vec4 out_color;
 
 void main() {
-    float alpha = texture(atlas, tex_coord).r;
+    float alpha = texture(atlas, tex_coord).a;
     out_color = vec4(fg_color.rgb, fg_color.a * alpha);
 }
 ` + "\x00"
@@ -104,6 +106,7 @@ layout(location = 1) in vec4 cursor_col; // RGBA color (instance)
 
 uniform mat4 projection;
 uniform vec2 cell_size;
+uniform vec2 padding;
 
 out vec4 c_color;
 
@@ -113,7 +116,7 @@ void main() {
         float(gl_VertexID == 2 || gl_VertexID == 3)
     );
 
-    vec2 pos = cursor_pos * cell_size + cell_size * corner;
+    vec2 pos = padding + cursor_pos * cell_size + cell_size * corner;
     gl_Position = projection * vec4(pos, 0.0, 1.0);
     c_color = cursor_col;
 }

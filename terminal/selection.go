@@ -2,11 +2,11 @@ package terminal
 
 // Selection represents a text selection in the terminal.
 type Selection struct {
-	Active    bool
-	StartRow  int
-	StartCol  int
-	EndRow    int
-	EndCol    int
+	Active        bool
+	StartRow      int
+	StartCol      int
+	EndRow        int
+	EndCol        int
 	SelectionMode SelectionMode
 }
 
@@ -98,6 +98,9 @@ func (t *Terminal) GetSelectedText() string {
 		if row == er {
 			endCol = ec
 		}
+
+		startCol = clamp(startCol, 0, len(grid[row].Cells))
+		endCol = clamp(endCol, 0, len(grid[row].Cells))
 
 		// Track trailing spaces for trimming
 		lineHasContent := false

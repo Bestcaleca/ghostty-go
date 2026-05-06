@@ -30,7 +30,7 @@ type Cell struct {
 type CursorStyle int
 
 const (
-	CursorBlock    CursorStyle = iota
+	CursorBlock CursorStyle = iota
 	CursorUnderline
 	CursorBeam
 )
@@ -64,6 +64,7 @@ type Renderer struct {
 
 	// Dimensions
 	cellW, cellH float32
+	cellAscent   float32
 	gridCols     int
 	gridRows     int
 	screenW      int
@@ -91,17 +92,18 @@ type Renderer struct {
 
 // Config holds renderer configuration.
 type Config struct {
-	Width        int
-	Height       int
-	CellWidth    float32
-	CellHeight   float32
-	GridCols     int
-	GridRows     int
-	PaddingX     float32
-	PaddingY     float32
-	BGColor      Color
-	CursorColor  Color
-	CursorStyle  CursorStyle
+	Width       int
+	Height      int
+	CellWidth   float32
+	CellHeight  float32
+	CellAscent  float32
+	GridCols    int
+	GridRows    int
+	PaddingX    float32
+	PaddingY    float32
+	BGColor     Color
+	CursorColor Color
+	CursorStyle CursorStyle
 }
 
 // New creates a new Renderer. Must be called from the main thread with a current GL context.
@@ -109,6 +111,7 @@ func New(cfg Config) *Renderer {
 	r := &Renderer{
 		cellW:      cfg.CellWidth,
 		cellH:      cfg.CellHeight,
+		cellAscent: cfg.CellAscent,
 		gridCols:   cfg.GridCols,
 		gridRows:   cfg.GridRows,
 		screenW:    cfg.Width,
@@ -173,8 +176,8 @@ func (r *Renderer) initBuffers() {
 	gl.GenBuffers(1, &r.textVBO)
 	gl.BindVertexArray(r.textVAO)
 	gl.BindBuffer(gl.ARRAY_BUFFER, r.textVBO)
-	// Per-instance: atlas_pos(uvec2) + glyph_size(uvec2) + bearings(ivec2) + grid_pos(uvec2) + color(uvec4)
-	// = 12 values, using float layout: 12 * 4 = 48 bytes
+	// Per-instance: atlas_pos + glyph_size + bearings + grid_pos + color
+	// = 12 float values, 12 * 4 = 48 bytes
 	var stride int32 = 48
 	gl.EnableVertexAttribArray(0)
 	gl.VertexAttribPointerWithOffset(0, 2, gl.FLOAT, false, stride, 0) // atlas_pos
@@ -273,7 +276,9 @@ func (r *Renderer) DrawFrame(grid [][]Cell) {
 		projLoc := gl.GetUniformLocation(r.bgProg, gl.Str("projection\x00"))
 		gl.UniformMatrix4fv(projLoc, 1, false, &r.proj[0])
 		cellSizeLoc := gl.GetUniformLocation(r.bgProg, gl.Str("cell_size\x00"))
-		gl.Uniform2f(cellSizeLoc, r.cellW+r.paddingX, r.cellH+r.paddingY)
+		gl.Uniform2f(cellSizeLoc, r.cellW, r.cellH)
+		paddingLoc := gl.GetUniformLocation(r.bgProg, gl.Str("padding\x00"))
+		gl.Uniform2f(paddingLoc, r.paddingX, r.paddingY)
 
 		gl.BindVertexArray(r.bgVAO)
 		gl.BindBuffer(gl.ARRAY_BUFFER, r.bgVBO)
@@ -288,7 +293,9 @@ func (r *Renderer) DrawFrame(grid [][]Cell) {
 		projLoc := gl.GetUniformLocation(r.textProg, gl.Str("projection\x00"))
 		gl.UniformMatrix4fv(projLoc, 1, false, &r.proj[0])
 		cellSizeLoc := gl.GetUniformLocation(r.textProg, gl.Str("cell_size\x00"))
-		gl.Uniform2f(cellSizeLoc, r.cellW+r.paddingX, r.cellH+r.paddingY)
+		gl.Uniform2f(cellSizeLoc, r.cellW, r.cellH)
+		paddingLoc := gl.GetUniformLocation(r.textProg, gl.Str("padding\x00"))
+		gl.Uniform2f(paddingLoc, r.paddingX, r.paddingY)
 		atlasSizeLoc := gl.GetUniformLocation(r.textProg, gl.Str("atlas_size\x00"))
 		gl.Uniform2f(atlasSizeLoc, float32(r.atlasW), float32(r.atlasH))
 
@@ -352,15 +359,14 @@ func (r *Renderer) buildTextData(grid [][]Cell) int {
 				continue
 			}
 
-			// Calculate baseline offset: cell ascent - glyph bearingY
-			bearingY := r.cellH*0.8 - entry.BearingY
+			bearingY := glyphTopOffset(r.cellAscent, entry.BearingY)
 
 			r.textData = append(r.textData,
-				float32(entry.X), float32(entry.Y),            // atlas_pos
-				float32(entry.Width), float32(entry.Height),    // glyph_size
-				entry.BearingX, bearingY,                        // bearings
-				float32(col), float32(row),                      // grid_pos
-				c.FG.R, c.FG.G, c.FG.B, c.FG.A,                // color
+				float32(entry.X), float32(entry.Y), // atlas_pos
+				float32(entry.Width), float32(entry.Height), // glyph_size
+				entry.BearingX, bearingY, // bearings
+				float32(col), float32(row), // grid_pos
+				c.FG.R, c.FG.G, c.FG.B, c.FG.A, // color
 			)
 		}
 	}
@@ -372,7 +378,9 @@ func (r *Renderer) drawCursor() {
 	projLoc := gl.GetUniformLocation(r.cursorProg, gl.Str("projection\x00"))
 	gl.UniformMatrix4fv(projLoc, 1, false, &r.proj[0])
 	cellSizeLoc := gl.GetUniformLocation(r.cursorProg, gl.Str("cell_size\x00"))
-	gl.Uniform2f(cellSizeLoc, r.cellW+r.paddingX, r.cellH+r.paddingY)
+	gl.Uniform2f(cellSizeLoc, r.cellW, r.cellH)
+	paddingLoc := gl.GetUniformLocation(r.cursorProg, gl.Str("padding\x00"))
+	gl.Uniform2f(paddingLoc, r.paddingX, r.paddingY)
 
 	cursorData := []float32{
 		float32(r.cursorCol), float32(r.cursorRow),
@@ -384,6 +392,10 @@ func (r *Renderer) drawCursor() {
 	gl.BufferData(gl.ARRAY_BUFFER, len(cursorData)*4, unsafe.Pointer(&cursorData[0]), gl.DYNAMIC_DRAW)
 	gl.DrawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, 1)
 	gl.BindVertexArray(0)
+}
+
+func glyphTopOffset(cellAscent, glyphMinY float32) float32 {
+	return cellAscent + glyphMinY
 }
 
 // EnsureAtlasGlyph ensures a rune is in the atlas, rasterizing it if needed.

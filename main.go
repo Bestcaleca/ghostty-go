@@ -19,6 +19,11 @@ import (
 const version = "0.3.0"
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h") {
+		fmt.Print(helpText())
+		return
+	}
+
 	fmt.Printf("ghostty-go v%s\n", version)
 
 	// GLFW must be called from the main thread
@@ -27,6 +32,26 @@ func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func helpText() string {
+	return fmt.Sprintf(`ghostty-go v%s
+
+Usage:
+  ghostty-go [--help]
+
+Shortcuts:
+  Ctrl+Shift+V      Paste clipboard text
+  Shift+PageUp      Scroll up through scrollback
+  Shift+PageDown    Scroll down through scrollback
+  Shift+Home        Jump to the bottom
+  Right click       Open context menu
+
+Mouse:
+  Left drag         Select text and copy on release
+  Double click      Select word
+  Triple click      Select line
+`, version)
 }
 
 func run() error {
@@ -116,6 +141,7 @@ func run() error {
 		Height:      cfg.WindowHeight,
 		CellWidth:   metrics.CellWidth,
 		CellHeight:  metrics.CellHeight,
+		CellAscent:  metrics.Ascent,
 		GridCols:    cols,
 		GridRows:    rows,
 		PaddingX:    paddingX,
@@ -193,7 +219,7 @@ func run() error {
 		s.HandleKey(key, action, mods)
 	})
 
-	window.SetCharModsCallback(func(w *glfw.Window, char rune, mods glfw.ModifierKey) {
+	window.SetCharCallback(func(w *glfw.Window, char rune) {
 		s.HandleChar(char)
 	})
 

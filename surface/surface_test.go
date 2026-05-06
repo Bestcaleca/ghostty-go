@@ -51,3 +51,41 @@ func TestStyleToColor(t *testing.T) {
 		t.Errorf("expected G≈0.502, got %f", c.G)
 	}
 }
+
+func TestApplyTextStyleReverseAndInvisible(t *testing.T) {
+	cell := renderer.Cell{
+		Char: 'X',
+		FG:   renderer.Color{R: 0.9, G: 0.8, B: 0.7, A: 1},
+		BG:   renderer.Color{R: 0.1, G: 0.2, B: 0.3, A: 1},
+	}
+
+	style := terminal.Style{Reverse: true}
+	got := applyTextStyle(cell, style)
+	if got.FG.R != cell.BG.R || got.BG.R != cell.FG.R {
+		t.Fatalf("reverse style did not swap colors: got fg=%+v bg=%+v", got.FG, got.BG)
+	}
+
+	style = terminal.Style{Invisible: true}
+	got = applyTextStyle(cell, style)
+	if got.Char != ' ' {
+		t.Fatalf("invisible style char = %q, want space", got.Char)
+	}
+}
+
+func TestApplyTextStyleBoldAndFaint(t *testing.T) {
+	cell := renderer.Cell{
+		Char: 'X',
+		FG:   renderer.Color{R: 0.5, G: 0.5, B: 0.5, A: 1},
+		BG:   renderer.Color{R: 0.1, G: 0.1, B: 0.1, A: 1},
+	}
+
+	bold := applyTextStyle(cell, terminal.Style{Bold: true})
+	if bold.FG.R <= cell.FG.R {
+		t.Fatalf("bold did not brighten foreground: got %f, want > %f", bold.FG.R, cell.FG.R)
+	}
+
+	faint := applyTextStyle(cell, terminal.Style{Faint: true})
+	if faint.FG.R >= cell.FG.R {
+		t.Fatalf("faint did not dim foreground: got %f, want < %f", faint.FG.R, cell.FG.R)
+	}
+}

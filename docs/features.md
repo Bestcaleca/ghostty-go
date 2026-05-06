@@ -1,5 +1,7 @@
 # Ghostty-Go 功能文档
 
+> AI 时代终端的产品级路线图见 [AI 时代终端功能清单](ai-terminal-feature-list.md)。
+
 ## 目录
 
 1. [VT 终端模拟](#vt-终端模拟)
